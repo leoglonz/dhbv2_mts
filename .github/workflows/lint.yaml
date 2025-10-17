@@ -2,11 +2,9 @@ name: Lint
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
+    branches: [master]
 
 jobs:
   lint:
@@ -15,28 +13,22 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         python-version: ['3.12', '3.13']
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5.0.0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv + Python
+        uses: astral-sh/setup-uv@v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
-      
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
+      # - name: Install dependencies
+      #   run: uv sync --extra dev --extra hydrodl2
 
-      - name: Run Ruff
-        run: ruff check . --output-format=github
+      - name: Run Ruff check
+        run: uv run ruff check . --config pyproject.toml --output-format=github
+
+      - name: Run Ruff format check
+        run: uv run ruff format . --config pyproject.toml --check

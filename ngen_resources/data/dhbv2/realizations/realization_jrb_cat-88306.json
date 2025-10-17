@@ -4,7 +4,7 @@
       {
         "name": "bmi_multi",
         "params": {
-          "model_type_name": "dhbv_2_0",
+          "model_type_name": "dhbv2",
           "forcing_file": "",
           "init_config": "",
           "allow_exceed_end_time": true,
@@ -13,14 +13,17 @@
             {
               "name": "bmi_python",
               "params": {
-                "python_type": "dhbv_2_0.DeltaModelBmi",
+                "python_type": "dhbv2.bmi.DeltaModelBmi",
                 "model_type_name": "DeltaModelBmi",
-                "init_config": "./data/dhbv_2_0/config/bmi_cat-88306.yml",
+                "init_config": "./data/dhbv2/config/bmi_cat-88306.yml",
                 "allow_exceed_end_time": true,
                 "main_output_variable": "land_surface_water__runoff_volume_flux",
                 "fixed_time_step": false,
                 "uses_forcing_file": false,
                 "variables_names_map" : {
+                  "P": "atmosphere_water__liquid_equivalent_precipitation_rate",
+                  "Temp": "land_surface_air__temperature",
+                  "PET": "land_surface_water__potential_evaporation_volume_flux",
                   "streamflow_cms": "land_surface_water__runoff_volume_flux"
                 },
                 "model_params": {
@@ -144,7 +147,7 @@
       }
     ],
     "forcing": {
-      "path": "./data/dhbv_2_0/forcing/attributes_jrb_5yr_cat-88306.nc",
+      "path": "./data/dhbv2/forcing/attributes_jrb_5yr_cat-88306.nc",
       "provider": "NetCDF"
     }
   },
