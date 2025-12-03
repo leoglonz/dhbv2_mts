@@ -1,6 +1,4 @@
 [build-system]
-# build-backend = "hatchling.build"
-# requires = ["hatchling", "hatch-vcs"]
 requires = ["setuptools>=69.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
@@ -23,7 +21,7 @@ dependencies = [
     "dmg @ git+https://github.com/mhpi/generic_deltamodel.git@ngiab",
     "hydrodl2 @ git+https://github.com/mhpi/hydrodl2.git@master",
     "numpy~=1.0",
-    "pandas >=1.1.5, <=2.2.0",
+    "pandas",
     "pre-commit",
     "torch",
     "tqdm",
@@ -47,16 +45,9 @@ dev = [
     "pytest",
     "ruff",
 ]
-hydrodl2 = [
-    "hydrodl2 @ git+https://github.com/mhpi/hydrodl2.git@master"
-]
 cuda = [
     "cupy-cuda12x",
 ]
-
-[tool.hatch]
-version.source = "vcs"
-build.hooks.vcs.version-file = "src/dhbv2/_version.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -83,7 +74,7 @@ lint.select = [
     "BLE",  # flake8-blind-except
     "UP",  # pyupgrade
     "RUF100",  # Report unused noqa directives
-    "COM812",  # Missing trailing comma
+    # "COM812",  # Missing trailing comma
 ]
 exclude = [
     ".git",
@@ -120,6 +111,8 @@ lint.ignore = [
     "W293",
     # Disable checks on | operator notation in type hints
     "UP007",
+    # Use `X | None` for type annotations
+    "UP045"
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -129,3 +122,8 @@ convention = "numpy"
 "docs/*" = ["I"]
 "tests/*" = ["D"]
 "*/__init__.py" = ["F401"]
+"*.ipynb" = ["E402", "E501", "F401", "F811", "F841", "T201"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+docstring-code-format = true
