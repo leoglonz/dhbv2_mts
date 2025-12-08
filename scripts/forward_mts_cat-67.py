@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
-from dhbv2.bmi_mts import DeltaModelBmi as Bmi
+from dhbv2.mts_bmi import MtsDeltaModelBmi as Bmi
 
 ### Configuration Settings (single-catchment) ###
 BMI_CONFIG_PATH = "ngen_resources/data/dhbv2_mts/config/bmi_cat-67.yaml"

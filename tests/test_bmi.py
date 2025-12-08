@@ -18,9 +18,7 @@ from dhbv2.bmi import DeltaModelBmi as bmi
 def cfg_file():
     """Path to the BMI config file."""
     config_path = (
-        Path(__file__).parent.parent.parent
-        / "bmi_config_files"
-        / "bmi_cat-67.yaml"
+        Path(__file__).parent.parent.parent / "bmi_config_files" / "bmi_cat-67.yaml"
     )
     if not config_path.exists():
         pytest.skip(f"Configuration file not found: {config_path}")

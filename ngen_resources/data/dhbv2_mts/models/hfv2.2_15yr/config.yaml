@@ -2,11 +2,12 @@
 # Yalan Song, Tadd Bindas, Chaopeng Shen, et al. High-resolution national-scale water modeling is enhanced by multiscale differentiable physics-informed machine learning. ESS Open Archive. 26 September 2024. https://doi.org/10.22541/essoar.172736277.74497104/v1.
 
 ## General -------------------------------#
-mode: simulation  # train, test, train_test, sim
+mode: sim  # train, test, train_test, sim
 do_tune: False  # python -m dmg +tune=true
 
 multimodel_type: none  # none, nn_parallel, nn_sequential
 seed: 111111
+cache_states: True
 device: cpu
 gpu_id: 0
 verbose: True
@@ -16,7 +17,7 @@ data_sampler: MsHydroSampler
 trainer: MsTrainer
 
 save_path: .
-model_dir: models/hfv2.2_15yr/dhbv_2_ep100.pt  # The trained dHBV 2.0 model (+ input data) can be downloaded from: https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/dHBV_2_0_trained.zip
+model_dir: models/hfv2.2_15yr/dhbv_2_mts_ep30.pt  # The trained dHBV 2.0 model (+ input data) can be downloaded from: https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/dHBV_2_0_trained.zip
 
 
 ## Training ------------------------------#
@@ -45,19 +46,21 @@ test:
   start_time: 1980/01/01
   end_time: 2020/12/31
   batch_size: 25
-  test_epoch: 100
+  test_epoch: 1
 
 
 ## Inference -------------------------------#
 sim:
   start_time: 1980/01/01
   end_time: 2020/12/31
-  batch_size: 25
+  batch_size: 1
 
 
 ## Differentiable Model -----------------------------#
 model:
   rho: 365
+  warm_up: 0
+  use_log_norm: []
 
   phy:
     ## Citations ##
@@ -65,16 +68,13 @@ model:
 
     name: [Hbv_2_mts]
     nmul: 4
-    warm_up: 0
     warm_up_states: True
     dy_drop: 0.0
     dynamic_params:
       Hbv_2_mts: [parBETA, parK0, parBETAET]
 
     routing: True
-    use_log_norm: []
     nearzero: 1e-5
-    cache_states: True
 
     forcings: [
       P,
