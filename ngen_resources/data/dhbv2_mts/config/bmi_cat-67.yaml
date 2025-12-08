@@ -1,7 +1,7 @@
 ### Single-catchment configuration ###
 catchment_id: 'cat-67'
 
-# Static catchment attributes
+# Catchment attributes
 aridity: 1.041
 meanP: 991.3
 ETPOT_Hargr: 1031.0
@@ -31,9 +31,9 @@ T_silt: 39.0
 Porosity: 0.01
 uparea: 3.254
 
-config_model: models/hfv2.2_15yr/config.yaml
+model_config: models/hfv2.2_15yr/config.yaml
 stepwise: True  # True: stepwise inference, False: Single forward simulation on all data in one go
-initial_state: zero  # zero: set initial states of the model to zero
+initial_state: none  # None: sets initial states of the model to zero
 dtype: np.float32
 verbose: 1  # 0: no output, 1: print output
 

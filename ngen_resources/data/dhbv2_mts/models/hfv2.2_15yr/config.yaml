@@ -63,13 +63,13 @@ model:
     ## Citations ##
     # HBV 2.0: Yalan Song, Tadd Bindas, Chaopeng Shen, et al. High-resolution national-scale water modeling is enhanced by multiscale differentiable physics-informed machine learning. ESS Open Archive. September 26, 2024. https://doi.org/10.22541/essoar.172736277.74497104/v1.
 
-    name: [Hbv_2]
+    name: [Hbv_2_mts]
     nmul: 4
     warm_up: 0
     warm_up_states: True
     dy_drop: 0.0
     dynamic_params:
-      Hbv_2: [parBETA, parK0, parBETAET]
+      Hbv_2_mts: [parBETA, parK0, parBETAET]
 
     routing: True
     use_log_norm: []

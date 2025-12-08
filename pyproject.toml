@@ -15,12 +15,13 @@ authors = [
 ]
 maintainers = [
     { name = "Leo Lonzarich", email = "lglonzaric@gmail.com" },
+    { name = "Yalan Song", email= "songyalan1@gmail.com" },
 ]
 requires-python = ">=3.9.0"
 dynamic = ["version"]
 dependencies = [
     "bmipy",
-    "dmg @ git+https://github.com/mhpi/generic_deltamodel.git@ngiab",
+    "dmg @ git+https://github.com/mhpi/generic_deltamodel.git@master",
     "hydrodl2 @ git+https://github.com/mhpi/hydrodl2.git@master",
     "numpy~=1.0",
     "pandas",
