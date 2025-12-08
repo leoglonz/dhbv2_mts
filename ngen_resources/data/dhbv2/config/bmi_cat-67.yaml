@@ -1,6 +1,5 @@
 ### Single-catchment configuration ###
-catchment_id: 'cat-88306'
-catchment_name: 'JRB-88306'
+catchment_id: 'cat-67'
 
 # Static catchment attributes
 aridity: 1.041
@@ -38,7 +37,4 @@ initial_state: zero  # zero: set initial states of the model to zero
 dtype: np.float32
 verbose: 1  # 0: no output, 1: print output
 
-# Simulation window
 time_step: 1 day
-start_time: 2000/01/01
-end_time: 2005/12/31
