@@ -433,14 +433,12 @@ class MtsDeltaModelBmi(Bmi):
         window.
         """
         # 1. Calculate hourly indices corresponding to the daily lookback
-        # We assume 1 day = 24 hours.
-        hours_per_day = 24
 
         # The daily input window starts at (T - 365 days) and ends at (T - 14 days) roughly
         # This matches the logic: start_daily_index : start_daily_index + lookback - 2*window
 
         # Calculate the start hour of the daily window
-        daily_start_hour = current_idx - (lookback_days * hours_per_day)
+        daily_start_hour = current_idx - (lookback_days * 24)
 
         # We need enough hours to cover the 'lookback_days' duration
         # Adjust this length based on exactly how many "daily pixels" the model expects
@@ -454,7 +452,7 @@ class MtsDeltaModelBmi(Bmi):
             )  # Shape (Time, Batch=1) assuming 1 basin
 
         # Extract the chunk of hourly data covering these days
-        total_hours_needed = n_days_needed * hours_per_day
+        total_hours_needed = n_days_needed * 24
         hourly_chunk = self._dynamic_var[var_name]['value'][
             daily_start_hour : daily_start_hour + total_hours_needed
         ]
