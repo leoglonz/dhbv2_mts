@@ -15,10 +15,9 @@ import numpy as np
 import torch
 import yaml
 from bmipy import Bmi
-from dmg.core.utils.factory import import_data_sampler
 from dmg.core.utils.dates import Dates
 
-from dmg import ModelHandler
+from dmg import MtsModelHandler
 from numpy.typing import NDArray
 from sklearn.exceptions import DataDimensionalityWarning
 from dhbv2.utils import bmi_array
@@ -70,6 +69,8 @@ _static_input_vars = [
     ('soil_silt__volume_fraction', 'percent'),
     ('soil_active-layer__porosity', '-'),
     ('basin__area', 'km2'),
+    ('catchment__area', 'km2'),
+    ('basin__length', 'km'),
 ]
 
 # ------------------------------------- #
@@ -84,9 +85,9 @@ _output_vars = [
 # ---------------------------------------------- #
 _var_name_internal_map = {
     # ----------- Dynamic inputs -----------
-    'precip': 'atmosphere_water__liquid_equivalent_precipitation_rate',
-    'temp': 'land_surface_air__temperature',
-    'pet': 'land_surface_water__potential_evaporation_volume_flux',
+    'P': 'atmosphere_water__liquid_equivalent_precipitation_rate',
+    'Temp': 'land_surface_air__temperature',
+    'PET': 'land_surface_water__potential_evaporation_volume_flux',
     # ----------- Static inputs -----------
     'aridity': 'ratio__mean_potential_evapotranspiration__mean_precipitation',
     'meanP': 'atmosphere_water__daily_mean_of_liquid_equivalent_precipitation_rate',
@@ -116,6 +117,8 @@ _var_name_internal_map = {
     'T_silt': 'soil_silt__volume_fraction',
     'Porosity': 'soil_active-layer__porosity',
     'uparea': 'basin__area',
+    'catchsize': 'catchment__area',
+    'lengthkm': 'basin__length',
     # ----------- Outputs -----------
     'streamflow': 'land_surface_water__runoff_volume_flux',
 }
@@ -162,6 +165,9 @@ class MtsDeltaModelBmi(Bmi):
     ) -> None:
         """Create a δHBV2.0 MTS BMI ready for initialization.
 
+        This is a multitimescale (hourly) version of the δHBV2.0 BMI at
+        (dhbv2/bmi.py).
+
         Parameters
         ----------
         config_path
@@ -198,14 +204,26 @@ class MtsDeltaModelBmi(Bmi):
 
         self.proc_time += time.time() - t_start
         if self.verbose:
-            log.info(f"BMI init took {time.time() - t_start} s")
+            log.debug(f"BMI init took {time.time() - t_start} s")
 
     @staticmethod
     def _set_vars(
         vars: list[tuple[str, str]],
         var_value: NDArray,
     ) -> dict[str, dict[str, Union[NDArray, str]]]:
-        """Set the values of given variables."""
+        """Set the values of given variables.
+
+        Returns
+        -------
+        dict
+            Dictionary of variable names mapping to their values and units.
+            e.g.,
+            {
+                'var_name_1': {'value': array([...]), 'units': 'unit_1'},
+                'var_name_2': {'value': array([...]), 'units': 'unit_2'},
+                ...
+            }
+        """
         var_dict = {}
         for item in vars:
             var_dict[item[0]] = {'value': var_value.copy(), 'units': item[1]}
@@ -274,9 +292,6 @@ class MtsDeltaModelBmi(Bmi):
         self.device = self.model_config['device']
         self.internal_dtype = self.model_config['dtype']
         self.external_dtype = eval(self.bmi_config['dtype'])
-        self.sampler = import_data_sampler(self.model_config['data_sampler'])(
-            self.model_config,
-        )
 
         # Load static variables from BMI config
         for name in self._static_var.keys():
@@ -296,7 +311,9 @@ class MtsDeltaModelBmi(Bmi):
 
         # Load a trained model
         try:
-            self._model = self._load_model(self.model_config).to(self.device)
+            self._model = self._load_model(self.model_config, verbose=self.verbose).to(
+                self.device,
+            )
             self._initialized = True
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e
@@ -382,95 +399,22 @@ class MtsDeltaModelBmi(Bmi):
     def _do_forward(self, data_dict: dict[str, Any]):
         """Forward model on the pre-formatted dictionary."""
         with torch.no_grad():
-            self.prediction = self._model.dpl_model(data_dict)
-
-            # The model output is usually a Dict.
-            # We want 'Qs' (Streamflow)
-            # Output Shape typically: (Window, Batch, 1)
-            # We only want the specific prediction for the center timestep
-
-            # Note: Depending on your model architecture, the prediction
-            # might correspond to the last step or the center step.
-            # In Sequence-to-One, it's the last step.
-            # In Sequence-to-Sequence, we take the center or last.
-
-            # Assuming we want the last value of the High-Freq window:
-            target_var = self.model_config['train']['target'][0]  # e.g. 'Qs'
-
-            # Get the result tensor
-            pred_tensor = self.prediction[target_var]  # Shape (Time, Batch, 1)
-
-            # We take the middle or last index?
-            # In your script: hourly_predict.append(output['Qs'][-current_window_size:,:,0]...)
-            # For a single step BMI, we usually just want the one value at T.
-            # Let's assume the model outputs a sequence matching the input window.
-            # We take the center value (which corresponds to current_time).
-
-            center_idx = pred_tensor.shape[0] // 2
-            final_val = pred_tensor[center_idx, :, :].cpu().numpy()
-
-            # Format into dictionary for _format_outputs
-            # Internal map expects 'streamflow' usually
-            return {'streamflow': final_val}
+            prediction = self._model.dpl_model(data_dict)
+            prediction = {
+                'streamflow': prediction['Qs'].detach().cpu().numpy(),
+            }
+        return prediction
 
     @staticmethod
-    def _load_model(config: dict):
+    def _load_model(config: dict, verbose: bool = False) -> MtsModelHandler:
         """Load a pre-trained model based on the configuration."""
         try:
-            return ModelHandler(config, verbose=True)
+            model = MtsModelHandler(config, verbose=verbose)
+            model.dpl_model.eval()
+            model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
+            return model
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e
-
-    def _get_daily_mean_window(
-        self,
-        var_name,
-        current_idx,
-        lookback_days,
-        window_day_width,
-    ):
-        """
-        Calculates daily means from hourly data for the specific lookback
-        window.
-        """
-        # 1. Calculate hourly indices corresponding to the daily lookback
-
-        # The daily input window starts at (T - 365 days) and ends at (T - 14 days) roughly
-        # This matches the logic: start_daily_index : start_daily_index + lookback - 2*window
-
-        # Calculate the start hour of the daily window
-        daily_start_hour = current_idx - (lookback_days * 24)
-
-        # We need enough hours to cover the 'lookback_days' duration
-        # Adjust this length based on exactly how many "daily pixels" the model expects
-        # Based on your previous script: n_days = lookback_days - 2 * window_size_day
-        n_days_needed = lookback_days - 2 * window_day_width
-
-        if daily_start_hour < 0:
-            # Handle Warmup edge case: Pad with first value or zeros
-            return np.zeros(
-                (n_days_needed, 1),
-            )  # Shape (Time, Batch=1) assuming 1 basin
-
-        # Extract the chunk of hourly data covering these days
-        total_hours_needed = n_days_needed * 24
-        hourly_chunk = self._dynamic_var[var_name]['value'][
-            daily_start_hour : daily_start_hour + total_hours_needed
-        ]
-
-        # Reshape to (Days, 24, Batch) and mean over axis 1 (hours)
-        # Assuming shape is (Time, Batch, 1) -> (Days, 24, Batch, 1)
-        # Note: Your _dynamic_var seems to be (Time, 1) based on init,
-        # but _format_inputs suggests it might grow. Assuming (Time, 1).
-
-        if hourly_chunk.shape[0] < total_hours_needed:
-            # End of data edge case
-            return np.zeros((n_days_needed, 1))
-
-        # Reshape to (Days, 24) (assuming single basin/batch for BMI)
-        daily_means = hourly_chunk.reshape(n_days_needed, 24).mean(axis=1)
-
-        # Return shape (Days, 1)
-        return daily_means[..., np.newaxis]
 
     def _format_outputs(self, outputs):
         """Format model outputs as BMI outputs."""
@@ -484,6 +428,8 @@ class MtsDeltaModelBmi(Bmi):
             else:
                 output_val = outputs[internal_name]
 
+            if output_val.ndim != 1:
+                output_val = output_val.squeeze()
             self._output_vars[name]['value'] = np.append(
                 self._output_vars[name]['value'],
                 output_val,
@@ -491,172 +437,132 @@ class MtsDeltaModelBmi(Bmi):
 
     def _format_inputs(self):
         """
-        Prepares inputs for a SINGLE timestep (self._timestep).
+        Prepare model inputs for a single timestep (self._timestep).
         Performs windowing and normalization immediately.
+
+        TODO: cleanup
         """
-        # --- Constants from your Model Config ---
-        # You might want to move these to __init__
-        window_size_hour = 7 * 24  # 168
-        lookback_days = 365
-        window_size_day = 7
+        self._load_norm_stats()
+
         eps = 1e-6
+        mean_dyn_hourly = np.asarray(
+            self.norm_stats['mean']['dyn_input'],
+            dtype=np.float32,
+        )
+        std_dyn_hourly = np.asarray(
+            self.norm_stats['std']['dyn_input'],
+            dtype=np.float32,
+        )
 
-        # Helper aliases
-        hf_config = self.model_config['delta_model']['nn_model']['high_freq_model']
-        var_x_list = hf_config['forcings']  # e.g., ['Pr', 'T']
-        var_c_list = hf_config['attributes']  # e.g., ['area']
+        mean_attr = np.asarray(
+            self.norm_stats['mean']['static_input'],
+            dtype=np.float32,
+        )
+        std_attr = np.asarray(self.norm_stats['std']['static_input'], dtype=np.float32)
+        mean_attr_rout = np.asarray(
+            self.norm_stats['mean']['rout_static_input'],
+            dtype=np.float32,
+        )
+        std_attr_rout = np.asarray(
+            self.norm_stats['std']['rout_static_input'],
+            dtype=np.float32,
+        )
 
-        current_idx = self._timestep
+        while mean_dyn_hourly.ndim < 3:
+            mean_dyn_hourly = mean_dyn_hourly[np.newaxis, ...]
+            std_dyn_hourly = std_dyn_hourly[np.newaxis, ...]
 
-        # --- 1. Hourly Window (High Freq) ---
-        # Window: [t - 168, t + 168]
-        h_start = current_idx - window_size_hour
-        h_end = current_idx + window_size_hour
+        while mean_attr.ndim < 2:
+            mean_attr = mean_attr[np.newaxis, ...]
+            std_attr = std_attr[np.newaxis, ...]
 
-        # Safety check for warmup
-        if h_start < 0:
-            log.warning(
-                f"Timestep {current_idx} is inside warmup period. Padding with zeros.",
+        while mean_attr_rout.ndim < 2:
+            mean_attr_rout = mean_attr_rout[np.newaxis, ...]
+            std_attr_rout = std_attr_rout[np.newaxis, ...]
+
+        var_x_list = self.model_config['model']['nn']['hif_model']['forcings']
+        var_c_list = self.model_config['model']['nn']['hif_model']['attributes']
+        var_c_list2 = self.model_config['model']['nn']['hif_model']['attributes2']
+
+        n_units = self._dynamic_var['land_surface_air__temperature']['value'].shape[0]
+        outlet_topo = torch.eye(n_units)
+
+        hourly_forcing = []
+        for var in var_x_list:
+            hourly_forcing.append(
+                np.expand_dims(
+                    self._dynamic_var[map_to_external(var)]['value'],
+                    axis=-1,
+                ),
             )
-            # Create dummy data if we are at the very start
-            # In production, you should start BMI after warmup period
+        hourly_forcing = np.concatenate(hourly_forcing, axis=-1)
 
-        x_hf_list = []
-        x_hf_norm_list = []
-
-        for name in var_x_list:
-            internal_name = map_to_internal(name)
-            # Retrieve Stats: [min, max, mean, std]
-            stats = self.norm_stats[internal_name]
-            mu, sigma = stats[2], stats[3]
-
-            # Extract raw
-            raw_val = self._dynamic_var[name]['value'][h_start:h_end]
-            x_hf_list.append(raw_val)
-
-            # Normalize
-            norm_val = (raw_val - mu) / (sigma + eps)
-            x_hf_norm_list.append(norm_val)
-
-        # Concatenate: (Time, Feat) -> (Time, 1, Feat) for Batch=1
-        x_phy_high = np.concatenate(x_hf_list, axis=-1)[..., np.newaxis].transpose(
-            0,
-            2,
-            1,
-        )
-        xc_nn_high = np.concatenate(x_hf_norm_list, axis=-1)[..., np.newaxis].transpose(
-            0,
-            2,
-            1,
-        )
-
-        # --- 2. Daily Window (Low Freq) ---
-        x_lf_list = []
-        x_lf_norm_list = []
-
-        # For daily stats, we need to map internal name to daily stats name if they differ
-        # Assuming your json has 'mean_daily' or similar, OR we use the same stats.
-        # Your previous script used specific daily stats keys.
-        # I will assume standard stats for now, adjust keys if needed.
-
-        for name in var_x_list:
-            internal_name = map_to_internal(name)
-            # You might need specific daily stats here if your JSON has them separately
-            stats = self.norm_stats[internal_name]
-            mu, sigma = stats[2], stats[3]
-
-            # Get Aggregated Daily Data
-            daily_val = self._get_daily_mean_window(
-                name,
-                current_idx,
-                lookback_days,
-                window_size_day,
+        attr = []
+        for var in var_c_list:
+            attr.append(
+                np.expand_dims(
+                    self._static_var[map_to_external(var)]['value'],
+                    axis=-1,
+                ),
             )
+        attr = np.concatenate(attr, axis=-1)
 
-            x_lf_list.append(daily_val)
-            x_lf_norm_list.append((daily_val - mu) / (sigma + eps))
+        attr_rout = []
+        for var in var_c_list2:
+            attr_rout.append(
+                np.expand_dims(
+                    self._static_var[map_to_external(var)]['value'],
+                    axis=-1,
+                ),
+            )
+        attr_rout = np.concatenate(attr_rout, axis=-1)
 
-        # Concatenate (Time, 1, Feat)
-        x_phy_low = np.concatenate(x_lf_list, axis=-1)[..., np.newaxis].transpose(
-            0,
-            2,
-            1,
+        # Normalization
+        hourly_forcing_norm = (hourly_forcing - mean_dyn_hourly) / (
+            std_dyn_hourly + eps
         )
-        xc_nn_low = np.concatenate(x_lf_norm_list, axis=-1)[..., np.newaxis].transpose(
-            0,
-            2,
-            1,
+        attr_norm = (attr - mean_attr) / (std_attr + eps)
+        attr_norm_rout = (attr_rout - mean_attr_rout) / (std_attr_rout + eps)
+
+        # 7 days warmup + 7 days prediction, we only give 1 timestep, use cached states
+        x_phy_high_freq = torch.from_numpy(hourly_forcing).permute([1, 0, 2])
+        xc_nn_norm_high_freq = torch.from_numpy(hourly_forcing_norm).permute([1, 0, 2])
+
+        c_nn_norm = torch.from_numpy(attr_norm)
+        xc_nn_norm_high_freq = torch.cat(
+            (
+                xc_nn_norm_high_freq,
+                c_nn_norm.unsqueeze(0).repeat(xc_nn_norm_high_freq.shape[0], 1, 1),
+            ),
+            dim=-1,
+        )
+        rc_nn_norm = torch.from_numpy(attr_norm_rout)
+
+        elev_all = torch.from_numpy(
+            self._static_var[map_to_external('meanelevation')]['value'],
+        )
+        ac_all = torch.from_numpy(self._static_var[map_to_external('uparea')]['value'])
+        areas = torch.from_numpy(
+            self._static_var[map_to_external('catchsize')]['value'],
         )
 
-        # --- 3. Static Attributes ---
-        c_norm_list = []
-        for name in var_c_list:
-            internal_name = map_to_internal(name)
-            stats = self.norm_stats[internal_name]
-            mu, sigma = stats[2], stats[3]
+        if elev_all.ndim < 2:
+            elev_all = elev_all.unsqueeze(0)
+        if ac_all.ndim < 2:
+            ac_all = ac_all.unsqueeze(0)
+        if areas.ndim < 2:
+            areas = areas.unsqueeze(0)
 
-            raw_c = self._static_var[name]['value']
-            norm_c = (raw_c - mu) / (sigma + eps)
-            c_norm_list.append(norm_c)
-
-        # Shape: (1, Feat) -> (1, Feat)
-        c_nn_norm = np.concatenate(c_norm_list, axis=-1)
-        if c_nn_norm.ndim == 1:
-            c_nn_norm = c_nn_norm[np.newaxis, :]
-
-        # --- 4. Package for Model ---
-        # We perform the repeat/broadcast here manually
-
-        # Convert to Tensor
-        d_out = {
-            'x_phy_high_freq': torch.from_numpy(x_phy_high).float().to(self.device),
-            'x_phy_low_freq': torch.from_numpy(x_phy_low).float().to(self.device),
-            'xc_nn_norm_high_freq': torch.from_numpy(xc_nn_high)
-            .float()
-            .to(self.device),
-            'xc_nn_norm_low_freq': torch.from_numpy(xc_nn_low).float().to(self.device),
-            'c_nn_norm': torch.from_numpy(c_nn_norm).float().to(self.device),
+        return {
+            'xc_nn_norm_high_freq': xc_nn_norm_high_freq,
+            'c_nn_norm': c_nn_norm,
+            'rc_nn_norm': rc_nn_norm,
+            'x_phy_high_freq': x_phy_high_freq,
+            'ac_all': ac_all,
+            'elev_all': elev_all,
+            'areas': areas,
+            'outlet_topo': outlet_topo,
         }
-
-        # Broadcast attributes (Append static to dynamic)
-        # Target shape: (Time, Batch, Feat + Attr)
-
-        # High Freq Append
-        c_exp_h = (
-            d_out['c_nn_norm']
-            .unsqueeze(0)
-            .repeat(d_out['xc_nn_norm_high_freq'].shape[0], 1, 1)
-        )
-        d_out['xc_nn_norm_high_freq'] = torch.cat(
-            (d_out['xc_nn_norm_high_freq'], c_exp_h),
-            dim=-1,
-        )
-
-        # Low Freq Append
-        c_exp_l = (
-            d_out['c_nn_norm']
-            .unsqueeze(0)
-            .repeat(d_out['xc_nn_norm_low_freq'].shape[0], 1, 1)
-        )
-        d_out['xc_nn_norm_low_freq'] = torch.cat(
-            (d_out['xc_nn_norm_low_freq'], c_exp_l),
-            dim=-1,
-        )
-
-        # Add Aux Data
-        ac_name = map_to_external(
-            self.model_config['observations']['upstream_area_name'],
-        )
-        el_name = map_to_external(self.model_config['observations']['elevation_name'])
-
-        d_out['ac_all'] = (
-            torch.from_numpy(self._static_var[ac_name]['value']).float().to(self.device)
-        )
-        d_out['elev_all'] = (
-            torch.from_numpy(self._static_var[el_name]['value']).float().to(self.device)
-        )
-
-        return d_out
 
     def normalize(
         self,
@@ -708,10 +614,10 @@ class MtsDeltaModelBmi(Bmi):
                 raise DataDimensionalityWarning("Data dimension must be 2 or 3.")
         return data_norm
 
-    def load_norm_stats(self) -> None:
+    def _load_norm_stats(self) -> None:
         """Load normalization statistics."""
         path = os.path.join(
-            self.model_config["model_path"],
+            self.model_config["model_dir"],
             "..",
             "normalization_statistics.json",
         )
@@ -728,29 +634,6 @@ class MtsDeltaModelBmi(Bmi):
                 self._output_vars[var_name]["value"] = prediction.cpu().numpy()
             else:
                 log.warning(f"Output variable '{var_name}' not recognized. Skipping.")
-
-    def _batch_data(
-        self,
-        batch_list: list[dict[str, torch.Tensor]],
-        target_key: str = None,
-    ) -> list[dict[str, np.ndarray]]:
-        """Merge list of batch data dictionaries into a single dictionary."""
-        data = {}
-        try:
-            if target_key:
-                return torch.cat([x[target_key] for x in batch_list], dim=1).numpy()
-
-            for key in batch_list[0].keys():
-                if len(batch_list[0][key].shape) == 3:
-                    dim = 1
-                else:
-                    dim = 0
-                data[key] = (
-                    torch.cat([d[key] for d in batch_list], dim=dim).cpu().numpy()
-                )
-            return data
-        except ValueError as e:
-            raise ValueError(f"Error concatenating batch data: {e}") from e
 
     @staticmethod
     def _fill_nan(array_3d):
@@ -871,11 +754,16 @@ class MtsDeltaModelBmi(Bmi):
         dest[:] = self.get_value_ptr(var_name).take(indices)
         return dest
 
-    def set_value(self, var_name, values: np.ndarray):
+    def set_value(self, var_name, values: list):
         """Set variable value."""
+        if not isinstance(values, list):
+            values = [values]
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if var_name in dict.keys():
-                dict[var_name]["value"] = values
+                dict[var_name]["value"] = np.expand_dims(
+                    np.array(values),
+                    axis=1,
+                )  # [time, space]
                 break
 
     def set_value_at_indices(self, name, inds, src):
@@ -1010,45 +898,47 @@ class MtsDeltaModelBmi(Bmi):
         dict
             Formatted configuration settings.
         """
-        config["device"], config["dtype"] = self.set_system_spec(config)
+        config['device'], config['dtype'] = self.set_system_spec(config)
 
         # Convert date ranges to integer values.
-        train_time = Dates(config["train"], config["model"]["rho"])
-        test_time = Dates(config["test"], config["model"]["rho"])
-        sim_time = Dates(config["sim"], config["model"]["rho"])
-        all_time = Dates(config["observations"], config["model"]["rho"])
+        rho = config['model']['rho']
+        # train_time = Dates(config['train'], rho)
+        # test_time = Dates(config['test'], rho)
+        sim_time = Dates(config['sim'], rho)
+        # all_time = Dates(config['observations'], rho)
 
-        exp_time_start = min(
-            train_time.start_time,
-            train_time.end_time,
-            test_time.start_time,
-            test_time.end_time,
-        )
-        exp_time_end = max(
-            train_time.start_time,
-            train_time.end_time,
-            test_time.start_time,
-            test_time.end_time,
-        )
+        # exp_time_start = min(
+        #     train_time.start_time,
+        #     train_time.end_time,
+        #     test_time.start_time,
+        #     test_time.end_time,
+        # )
+        # exp_time_end = max(
+        #     train_time.start_time,
+        #     train_time.end_time,
+        #     test_time.start_time,
+        #     test_time.end_time,
+        # )
 
-        config["train_time"] = [train_time.start_time, train_time.end_time]
-        config["test_time"] = [test_time.start_time, test_time.end_time]
-        config["sim_time"] = [sim_time.start_time, sim_time.end_time]
-        config["experiment_time"] = [exp_time_start, exp_time_end]
-        config["all_time"] = [all_time.start_time, all_time.end_time]
+        # config['train_time'] = [train_time.start_time, train_time.end_time]
+        # config['test_time'] = [test_time.start_time, test_time.end_time]
+        config['sim_time'] = [sim_time.start_time, sim_time.end_time]
+        # config['experiment_time'] = [exp_time_start, exp_time_end]
+        # config['all_time'] = [all_time.start_time, all_time.end_time]
 
-        if config.get("model_dir") is None:
-            config["model_dir"] = ""
-        config["plot_dir"] = ""
-        config["sim_dir"] = ""
-        config["log_dir"] = ""
+        if config.get('model_dir') is None:
+            config['model_dir'] = ''
+        config['plot_dir'] = ''
+        config['sim_dir'] = ''
+        config['log_dir'] = ''
 
         # Convert string back to data type.
-        config["dtype"] = eval(config["dtype"])
-        config["model"]["phy"]["nearzero"] = float(config["model"]["phy"]["nearzero"])
+        config['dtype'] = eval(config['dtype'])
 
-        # Raytune
-        config["do_tune"] = config.get("do_tune", False)
+        for name in ['hif_model', 'lof_model']:
+            config['model']['phy'][name]['nearzero'] = float(
+                config['model']['phy'][name]['nearzero'],
+            )
 
         return config
 

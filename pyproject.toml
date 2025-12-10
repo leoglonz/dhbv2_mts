@@ -22,7 +22,7 @@ dynamic = ["version"]
 dependencies = [
     "bmipy",
     "dmg @ git+https://github.com/mhpi/generic_deltamodel.git@ngen_mts",
-    "hydrodl2 @ git+https://github.com/mhpi/hydrodl2.git@master",
+    "hydrodl2 @ git+https://github.com/mhpi/hydrodl2.git@ngen_mts",
     "numpy~=1.0",
     "pandas",
     "pre-commit",

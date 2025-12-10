@@ -28,7 +28,7 @@ forcing_path = os.path.join(pkg_root, Path(FORCING_PATH))
 
 # Create dHBV 2.0 BMI instance
 print(">>> Creating DeltaModelBmi instance")
-model = Bmi()
+model = Bmi(verbose=True)
 
 
 ### BMI initialization ###
