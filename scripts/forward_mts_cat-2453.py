@@ -26,6 +26,7 @@ FORCING_PATH = (
 )
 ### ----------------------------------------- ###
 
+
 # Setup pathing
 pkg_root = Path(__file__).parent.parent
 bmi_config_path = os.path.join(pkg_root, Path(BMI_CONFIG_PATH))
@@ -73,7 +74,7 @@ for t in range(t_steps):
 
     dest_array = np.zeros(1)
     model.get_value('land_surface_water__runoff_volume_flux', dest_array)
-    runoff = dest_array[0]
+    runoff = dest_array[-1]
 
     log.info(
         f"Result: Streamflow at time {model.get_current_time()} ({model.get_time_units()}) is {runoff:.4f} m3/s",

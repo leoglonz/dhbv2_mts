@@ -34,7 +34,7 @@ catchsize: 7.7805003825041545
 lengthkm: 2.147179500288239
 
 model_config: models/hfv2.2_15yr/config.yaml
-# states_name: initial_states_2009.pt
+states_name: initial_states_2009.pt
 # stats_path: models/hfv2.2_15yr/normalization_statistics.json
 use_daily_states: false
 dtype: np.float32
