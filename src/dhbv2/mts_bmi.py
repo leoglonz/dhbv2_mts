@@ -23,7 +23,7 @@ from sklearn.exceptions import DataDimensionalityWarning
 from dhbv2.utils import bmi_array
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
+log = logging.getLogger('MTS_BMI')
 
 root_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -687,12 +687,15 @@ class MtsDeltaModelBmi(Bmi):
         if var_name == 'land_surface_air__temperature':
             # degK to degC
             return [v - 273.15 for v in values]
-
         return values
 
     def _to_external_units(self, var_name: str, values: list) -> list:
         """Convert internal model units to external units."""
-        pass
+        if var_name == 'atmosphere_water__liquid_equivalent_precipitation_rate':
+            # mm h-1 to m3 s-1  (use catchment area)
+            area = self._static_var[map_to_external('catchment__area')]['value']
+            return [v * 1000 / 3600 * area for v in values]
+        return values
 
     def array_to_tensor(self) -> None:
         """Converts input values into Torch tensor object to be read by model."""
@@ -707,9 +710,6 @@ class MtsDeltaModelBmi(Bmi):
 
     def get_tensor_slice(self):
         """Get tensor of input data for a single timestep."""
-        # sample_dict = take_sample_test(self.bmi_config, self.dataset_dict)
-        # self.input_tensor = torch.Tensor()
-
         raise NotImplementedError("get_tensor_slice")
 
     def get_var_type(self, var_name):
@@ -729,8 +729,7 @@ class MtsDeltaModelBmi(Bmi):
         str
             Variable units.
         """
-        # Combine input/output variable dicts: NOTE: should add to init.
-        return {**self._dynamic_var, **self._output_vars}[var_standard_name]["units"]
+        return {**self._dynamic_var, **self._output_vars}[var_standard_name]['units']
 
     def get_var_nbytes(self, var_name):
         """Get units of variable."""
@@ -770,20 +769,21 @@ class MtsDeltaModelBmi(Bmi):
         """Reference to values."""
         return {**self._dynamic_var, **self._static_var, **self._output_vars}[
             var_standard_name
-        ]["value"]
+        ]['value']
 
     def get_value(self, var_name: str, dest: NDArray):
         """Return copy of variable values."""
-        # TODO: will need to properly account for multiple basins.
         try:
-            dest[:] = self.get_value_ptr(var_name)[self._timestep - 1,].flatten()
+            tmp = self.get_value_ptr(var_name)[self._timestep - 1,].flatten()
+            dest[:] = self._to_external_units(var_name, tmp.tolist())
         except RuntimeError as e:
             raise e
         return dest
 
     def get_value_at_indices(self, var_name, dest, indices):
         """Get values at indices."""
-        dest[:] = self.get_value_ptr(var_name).take(indices)
+        tmp = self.get_value_ptr(var_name).take(indices)
+        dest[:] = self._to_external_units(var_name, tmp.tolist())
         return dest
 
     def set_value(self, var_name, values: list):
@@ -793,7 +793,7 @@ class MtsDeltaModelBmi(Bmi):
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if var_name in dict.keys():
                 values = self._to_internal_units(var_name, values)
-                dict[var_name]["value"] = np.expand_dims(
+                dict[var_name]['value'] = np.expand_dims(
                     np.array(values),
                     axis=1,
                 )  # [time, space]
@@ -806,8 +806,9 @@ class MtsDeltaModelBmi(Bmi):
 
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if name in dict.keys():
+                src = self._to_internal_units(name, src)
                 for i in inds:
-                    dict[name]["value"][i] = src[i]
+                    dict[name]['value'][i] = src[i]
                 break
 
     def get_component_name(self):
@@ -832,21 +833,14 @@ class MtsDeltaModelBmi(Bmi):
 
     def get_grid_shape(self, grid_id, shape):
         """Number of rows and columns of uniform rectilinear grid."""
-        # var_name = self._grids[grid_id][0]
-        # shape[:] = self.get_value_ptr(var_name).shape
-        # return shape
         raise NotImplementedError("get_grid_shape")
 
     def get_grid_spacing(self, grid_id, spacing):
         """Spacing of rows and columns of uniform rectilinear grid."""
-        # spacing[:] = self._model.spacing
-        # return spacing
         raise NotImplementedError("get_grid_spacing")
 
     def get_grid_origin(self, grid_id, origin):
         """Origin of uniform rectilinear grid."""
-        # origin[:] = self._model.origin
-        # return origin
         raise NotImplementedError("get_grid_origin")
 
     def get_grid_type(self, grid_id):
@@ -1012,17 +1006,3 @@ class MtsDeltaModelBmi(Bmi):
 
         dtype = torch.float32
         return str(device), str(dtype)
-
-    # def scale_output(self) -> None:
-    #     """
-    #     Scale and return more meaningful output from wrapped model.
-    #     """
-    #     models = self.config['hydro_models'][0]
-
-    #     # TODO: still have to finish finding and undoing scaling applied before
-    #     # model run. (See some checks used in bmi_lstm.py.)
-
-    #     # Strip unnecessary time and variable dims. This gives 1D array of flow
-    #     # at each basin.
-    #     # TODO: setup properly for multiple models later.
-    #     self.streamflow_cms = self.preds[models]['flow_sim'].squeeze()

@@ -55,7 +55,7 @@ for t in range(t_steps):
     # Set forcing values
     model.set_value(
         'atmosphere_water__liquid_equivalent_precipitation_rate',
-        forcings['APCP_surface'].isel({'time': t}).item(),
+        forcings['precip_rate'].isel({'time': t}).item(),
     )
     model.set_value(
         'land_surface_air__temperature',

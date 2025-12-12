@@ -37,7 +37,7 @@ def transform_dataset(ds_in):
     # 2. Rename Existing Variables
     ds = ds.rename(
         {
-            'P': 'APCP_surface',
+            'P': 'precip_rate',
             'T': 'TMP_2maboveground',
             'PET': 'PET_hargreaves',
         },
@@ -69,13 +69,13 @@ def transform_dataset(ds_in):
 
     # 5. Create Zero-Filled Variables
     zero_vars = [
+        'APCP_surface',
         'DLWRF_surface',
         'DSWRF_surface',
         'PRES_surface',
         'SPFH_2maboveground',
         'UGRD_10maboveground',
         'VGRD_10maboveground',
-        'precip_rate',
     ]
 
     # Create zeros based on the new subset shape
@@ -84,6 +84,19 @@ def transform_dataset(ds_in):
 
     for var in zero_vars:
         ds[var] = (('catchment-id', 'time'), zeros)
+
+    # Convert to temp to kelvin
+    ds['TMP_2maboveground'] = ds['TMP_2maboveground'] + 273.15
+    ds['TMP_2maboveground'].attrs['units'] = 'K'
+    ds['precip_rate'].attrs['units'] = 'mm hr-1'
+    ds['PET_hargreaves'].attrs['units'] = 'mm hr-1'
+    ds['APCP_surface'].attrs['units'] = 'kg m-2'
+    ds['DLWRF_surface'].attrs['units'] = 'W m-2'
+    ds['DSWRF_surface'].attrs['units'] = 'W m-2'
+    ds['PRES_surface'].attrs['units'] = 'Pa'
+    ds['SPFH_2maboveground'].attrs['units'] = 'g g-1'
+    ds['UGRD_10maboveground'].attrs['units'] = 'm s-1'
+    ds['VGRD_10maboveground'].attrs['units'] = 'm s-1'
 
     # 6. NOW it is safe to drop the coordinates
     ds = ds.drop_vars(['time', 'catchment-id'])
