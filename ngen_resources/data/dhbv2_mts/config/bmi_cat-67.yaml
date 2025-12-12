@@ -36,8 +36,8 @@ lengthkm: 3.2
 model_config: models/hfv2.2_15yr/config.yaml
 states_name: initial_states_2009.pt
 # stats_path: models/hfv2.2_15yr/normalization_statistics.json
-initial_state: none  # None: sets initial states of the model to zero
+use_daily_states: false
 dtype: np.float32
 verbose: true  # 0: no output, 1: print output
 
-time_step: 1 day
+time_step: 1 hour

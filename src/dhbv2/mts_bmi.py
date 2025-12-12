@@ -9,17 +9,17 @@ import json
 import logging
 import os
 import time
-from typing import Optional, Union, Any
+from typing import Any, Optional, Union
 
 import numpy as np
 import torch
 import yaml
 from bmipy import Bmi
-from dmg.core.utils.dates import Dates
-
 from dmg import MtsModelHandler
+from dmg.core.utils.dates import Dates
 from numpy.typing import NDArray
 from sklearn.exceptions import DataDimensionalityWarning
+
 from dhbv2.utils import bmi_array
 
 logging.basicConfig(level=logging.INFO)
@@ -313,7 +313,7 @@ class MtsDeltaModelBmi(Bmi):
         # Load a trained model
         try:
             self._model = self._load_model().to(self.device)
-            self._load_states()
+            # self._load_states()
             self._initialized = True
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e

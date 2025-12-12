@@ -7,11 +7,12 @@ We use catchment 67 which is included with NOAA-OWP/ngen.
 """
 
 import os
-from pathlib import Path
 import random
+from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from dhbv2.mts_bmi import MtsDeltaModelBmi as Bmi
 
 ### Configuration Settings (single-catchment) ###

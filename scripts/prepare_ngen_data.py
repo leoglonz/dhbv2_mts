@@ -4,8 +4,8 @@
 Mirrors structure of ./ngen/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 23_00_00.csv
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 n_cat = 3
