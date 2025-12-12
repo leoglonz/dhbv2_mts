@@ -1,6 +1,10 @@
 """
 Forward BMI on dummy data with pseudo-NextGen operating behavior to test
 implementation.
+
+TODO: WIP post-dhbv2 MTS update.
+
+@leoglonz
 """
 
 import os

@@ -180,6 +180,7 @@ class MtsDeltaModelBmi(Bmi):
         self._time_units = self._att_map['time_units']
         self._time_step_size = self._att_map['time_step_size']
         self._model = None
+        self._states = None
         self._initialized = False
         self.verbose = verbose
 
@@ -311,9 +312,8 @@ class MtsDeltaModelBmi(Bmi):
 
         # Load a trained model
         try:
-            self._model = self._load_model(self.model_config, verbose=self.verbose).to(
-                self.device,
-            )
+            self._model = self._load_model().to(self.device)
+            self._load_states()
             self._initialized = True
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e
@@ -405,16 +405,34 @@ class MtsDeltaModelBmi(Bmi):
             }
         return prediction
 
-    @staticmethod
-    def _load_model(config: dict, verbose: bool = False) -> MtsModelHandler:
+    def _load_model(self) -> MtsModelHandler:
         """Load a pre-trained model based on the configuration."""
         try:
-            model = MtsModelHandler(config, verbose=verbose)
+            model = MtsModelHandler(self.model_config, verbose=self.verbose)
             model.dpl_model.eval()
+            model.dpl_model.phy_model.high_freq_model.dt = 1
+            model.dpl_model.phy_model.lof_from_cache = True
             model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e
+
+    def _load_states(self) -> None:
+        """Load saved model states if specified in BMI config."""
+        if self._states is None:
+            path = os.path.join(
+                self.model_config["model_dir"],
+                "..",
+                self.bmi_config['states_name'],
+            )
+            self._states = torch.load(os.path.abspath(path))
+            try:
+                self._model.dpl_model.phy_model.load_states(self._states)
+                self._model.dpl_model.phy_model.low_freq_model.load_states(
+                    self._states[0],
+                )
+            except RuntimeError as e:
+                raise RuntimeError(f"Failed to load model states: {e}") from e
 
     def _format_outputs(self, outputs):
         """Format model outputs as BMI outputs."""
@@ -554,14 +572,16 @@ class MtsDeltaModelBmi(Bmi):
             areas = areas.unsqueeze(0)
 
         return {
-            'xc_nn_norm_high_freq': xc_nn_norm_high_freq,
-            'c_nn_norm': c_nn_norm,
-            'rc_nn_norm': rc_nn_norm,
-            'x_phy_high_freq': x_phy_high_freq,
-            'ac_all': ac_all,
-            'elev_all': elev_all,
-            'areas': areas,
-            'outlet_topo': outlet_topo,
+            'xc_nn_norm_low_freq': None,
+            'xc_nn_norm_high_freq': xc_nn_norm_high_freq.to(self.internal_dtype),
+            'c_nn_norm': c_nn_norm.to(self.internal_dtype),
+            'rc_nn_norm': rc_nn_norm.to(self.internal_dtype),
+            'x_phy_low_freq': None,
+            'x_phy_high_freq': x_phy_high_freq.to(self.internal_dtype),
+            'ac_all': ac_all.to(self.internal_dtype),
+            'elev_all': elev_all.to(self.internal_dtype),
+            'areas': areas.to(self.internal_dtype),
+            'outlet_topo': outlet_topo.to(self.internal_dtype),
         }
 
     def normalize(
@@ -662,6 +682,18 @@ class MtsDeltaModelBmi(Bmi):
                     )
         return array_3d
 
+    def _to_internal_units(self, var_name: str, values: list) -> list:
+        """Convert external units to internal model units."""
+        if var_name == 'land_surface_air__temperature':
+            # degK to degC
+            return [v - 273.15 for v in values]
+
+        return values
+
+    def _to_external_units(self, var_name: str, values: list) -> list:
+        """Convert internal model units to external units."""
+        pass
+
     def array_to_tensor(self) -> None:
         """Converts input values into Torch tensor object to be read by model."""
         raise NotImplementedError("array_to_tensor")
@@ -760,6 +792,7 @@ class MtsDeltaModelBmi(Bmi):
             values = [values]
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if var_name in dict.keys():
+                values = self._to_internal_units(var_name, values)
                 dict[var_name]["value"] = np.expand_dims(
                     np.array(values),
                     axis=1,

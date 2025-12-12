@@ -10,14 +10,14 @@ import os
 from pathlib import Path
 import random
 
-import pandas as pd
+import xarray as xr
 import numpy as np
 from dhbv2.mts_bmi import MtsDeltaModelBmi as Bmi
 
 ### Configuration Settings (single-catchment) ###
-BMI_CONFIG_PATH = "ngen_resources/data/dhbv2_mts/config/bmi_cat-67.yaml"
+BMI_CONFIG_PATH = "ngen_resources/data/dhbv2_mts/config/bmi_cat-2453.yaml"
 FORCING_PATH = (
-    "ngen_resources/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 23_00_00.csv"
+    "ngen_resources/data/forcing/camels_2010-01-01_00_00_00_2011-12-30_23_00_00.nc"
 )
 ### ----------------------------------------- ###
 
@@ -38,13 +38,12 @@ model.initialize(config_path=bmi_config_path)
 
 
 print("[Preparing data]")
-f_dict = pd.read_csv(forcing_path)
-t_steps = len(f_dict["time"])
+forcing_xr = xr.open_dataset(forcing_path)
+t_steps = len(forcing_xr["time"])
 
 print(
     "[Looping through timesteps | Setting forcing/attribute values & forwarding model]",
 )
-
 
 for t in range(t_steps):
     # print(f"\n--- Timestep {t + 1}/{t_steps} ---")
@@ -52,21 +51,21 @@ for t in range(t_steps):
     # Set forcing values
     model.set_value(
         "atmosphere_water__liquid_equivalent_precipitation_rate",
-        f_dict["precip_rate"][t] + random.randrange(0, 4),
+        forcing_xr["precip_rate"][t] + random.randrange(0, 4),
     )
     model.set_value(
         "land_surface_air__temperature",
-        f_dict["TMP_2maboveground"][t],
+        forcing_xr["TMP_2maboveground"][t],
     )
     model.set_value(
         "land_surface_water__potential_evaporation_volume_flux",
-        f_dict["PET_hargreaves"][t],
+        forcing_xr["PET_hargreaves"][t],
     )
     print(
         ">>> Forcings set"
-        f" | Precip: {f_dict['precip_rate'][t]:.4f} m/s,"
-        f" Temp: {f_dict['TMP_2maboveground'][t]:.2f} K,"
-        f" PET: {f_dict['PET_hargreaves'][t]:.4f} m3/s",
+        f" | Precip: {forcing_xr['precip_rate'][t]:.4f} m/s,"
+        f" Temp: {forcing_xr['TMP_2maboveground'][t]:.2f} K,"
+        f" PET: {forcing_xr['PET_hargreaves'][t]:.4f} m3/s",
     )
 
     # if f_dict['precip_rate'][t] > 0.01:
