@@ -5,11 +5,10 @@ Authors: Jessica Garrett, Jonathan Frame | Leo Lonzarich (Adapted)
 
 from pathlib import Path
 
-import pytest
 import numpy as np
+import pytest
 
 from dhbv2.bmi import DeltaModelBmi as bmi
-
 
 # --- Fixtures ---
 

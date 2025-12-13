@@ -8,16 +8,15 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional, Union, Any
+from typing import Any, Optional, Union
 
 import numpy as np
 import torch
 import yaml
 from bmipy import Bmi
-from dmg.core.utils.factory import import_data_sampler
-from dmg.core.utils.dates import Dates
-
 from dmg import ModelHandler
+from dmg.core.utils.dates import Dates
+from dmg.core.utils.factory import import_data_sampler
 from numpy.typing import NDArray
 from sklearn.exceptions import DataDimensionalityWarning
 

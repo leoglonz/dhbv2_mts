@@ -3,9 +3,9 @@ import os
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
+
 import numpy as np
 from numpy.typing import NDArray
-
 from platformdirs import user_config_dir
 
 log = logging.getLogger('dhbv2')

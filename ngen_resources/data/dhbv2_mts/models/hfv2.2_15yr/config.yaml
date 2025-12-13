@@ -79,12 +79,12 @@ model:
     name: ['Hbv_2_mts']
 
     hif_model:
-      name: [Hbv_2_mts]
+      name: [Hbv_2_hourly]
       nmul: 1
       warm_up_states: true
       dy_drop: 0.0
       dynamic_params:
-        Hbv_2_mts: [parBETA, parK0, parBETAET]
+        Hbv_2_hourly: [parBETA, parK0, parBETAET]
 
       routing: false
       nearzero: 1e-5

@@ -7,10 +7,12 @@ We use catchment 67 which is included with NOAA-OWP/ngen.
 """
 
 import os
+import random
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from dhbv2.mts_bmi import MtsDeltaModelBmi as Bmi
 
 ### Configuration Settings (single-catchment) ###
@@ -44,13 +46,14 @@ print(
     "[Looping through timesteps | Setting forcing/attribute values & forwarding model]",
 )
 
+
 for t in range(t_steps):
-    print(f"\n--- Timestep {t + 1}/{t_steps} ---")
+    # print(f"\n--- Timestep {t + 1}/{t_steps} ---")
 
     # Set forcing values
     model.set_value(
         "atmosphere_water__liquid_equivalent_precipitation_rate",
-        f_dict["precip_rate"][t],
+        f_dict["precip_rate"][t] + random.randrange(0, 4),
     )
     model.set_value(
         "land_surface_air__temperature",
@@ -60,9 +63,18 @@ for t in range(t_steps):
         "land_surface_water__potential_evaporation_volume_flux",
         f_dict["PET_hargreaves"][t],
     )
+    print(
+        ">>> Forcings set"
+        f" | Precip: {f_dict['precip_rate'][t]:.4f} m/s,"
+        f" Temp: {f_dict['TMP_2maboveground'][t]:.2f} K,"
+        f" PET: {f_dict['PET_hargreaves'][t]:.4f} m3/s",
+    )
+
+    # if f_dict['precip_rate'][t] > 0.01:
+    #     print(">>> High precip event!")
 
     ### BMI update ###
-    print(">>> Doing BMI model update")
+    # print(">>> Doing BMI model update")
     model.update()
 
     dest_array = np.zeros(1)

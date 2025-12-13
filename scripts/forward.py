@@ -1,14 +1,19 @@
 """
 Forward BMI on dummy data with pseudo-NextGen operating behavior to test
 implementation.
+
+TODO: WIP post-dhbv2 MTS update.
+
+@leoglonz
 """
 
 import os
 from pathlib import Path
 
 import numpy as np
-from dhbv2.bmi import DeltaModelBmi as Bmi
 from netCDF4 import Dataset
+
+from dhbv2.bmi import DeltaModelBmi as Bmi
 
 ### Configuration Settings (single-catchment) ###
 BASIN_ID = 'cat-88306'
