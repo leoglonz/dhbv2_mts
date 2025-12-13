@@ -85,7 +85,7 @@ _output_vars = [
 _var_name_internal_map = {
     # ----------- Dynamic inputs -----------
     'P': 'atmosphere_water__liquid_equivalent_precipitation_rate',
-    'Temp': 'land_surface_air__temperature',
+    'T': 'land_surface_air__temperature',
     'PET': 'land_surface_water__potential_evaporation_volume_flux',
     # ----------- Static inputs -----------
     'aridity': 'ratio__mean_potential_evapotranspiration__mean_precipitation',
@@ -700,13 +700,14 @@ class MtsDeltaModelBmi(Bmi):
         try:
             model = MtsModelHandler(self.model_config, verbose=self.verbose)
             model.dpl_model.eval()
+
             model.dpl_model.nn_model.lstm_mlp2.cache_states = True
+            model.dpl_model.phy_model.low_freq_model.cache_states = False
+            model.dpl_model.phy_model.high_freq_model.cache_states = True
 
             model.dpl_model.phy_model.lof_from_cache = True
             model.dpl_model.phy_model.load_from_cache = True
 
-            model.dpl_model.phy_model.low_freq_model.cache_states = True
-            model.dpl_model.phy_model.high_freq_model.cache_states = True
             model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
             return model
         except Exception as e:
