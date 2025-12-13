@@ -2,6 +2,8 @@
 3 catchments, 2010-2012.
 
 Mirrors structure of ./ngen/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 23_00_00.csv
+
+@leoglonz
 """
 
 import numpy as np
@@ -9,8 +11,8 @@ import pandas as pd
 import xarray as xr
 
 n_cat = 3
-t_start = '2010-01-01 00:00:00'
-t_end = '2011-12-30 23:00:00'
+t_start = '2008-01-09 00:00:00'
+t_end = '2015-12-30 23:00:00'
 
 example_path = '/projects/mhpi/leoglonz/ciroh-ua/ciroh-ua-ngen/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 23_00_00.csv'
 camels_path = '/gpfs/yxs275/data/hourly/CAMELS_HF/forcing/forcing_1990_2018_gauges_hourly_00000_00499.nc'
@@ -43,6 +45,9 @@ def transform_dataset(ds_in):
         },
     )
 
+    for var in ds.variables:
+        ds[var].encoding = {}
+
     # 3. Create 'ids' Variable
     raw_ids = ds['catchment-id'].values.astype(str)
 
@@ -63,8 +68,6 @@ def transform_dataset(ds_in):
     )
 
     ds['Time'] = (('catchment-id', 'time'), time_broadcasted)
-
-    # Explicitly add the unit metadata to match your target
     ds['Time'].attrs = {'units': 'ns'}
 
     # 5. Create Zero-Filled Variables
@@ -80,13 +83,16 @@ def transform_dataset(ds_in):
 
     # Create zeros based on the new subset shape
     shape = (ds.sizes['catchment-id'], ds.sizes['time'])
-    zeros = np.zeros(shape, dtype='float32')
+    zeros = np.zeros(shape, dtype='float64')
 
     for var in zero_vars:
         ds[var] = (('catchment-id', 'time'), zeros)
+        ds[var].encoding = {'_FillValue': None}  # Ensure no default fill values exist
 
     # Convert to temp to kelvin
-    ds['TMP_2maboveground'] = ds['TMP_2maboveground'] + 273.15
+    ds['TMP_2maboveground'] = ds['TMP_2maboveground'].astype('float64') + np.float64(
+        273.15,
+    )
     ds['TMP_2maboveground'].attrs['units'] = 'K'
     ds['precip_rate'].attrs['units'] = 'mm hr-1'
     ds['PET_hargreaves'].attrs['units'] = 'mm hr-1'
@@ -98,6 +104,12 @@ def transform_dataset(ds_in):
     ds['UGRD_10maboveground'].attrs['units'] = 'm s-1'
     ds['VGRD_10maboveground'].attrs['units'] = 'm s-1'
 
+    ds['TMP_2maboveground'].attrs['units'] = 'K'
+    ds['precip_rate'].attrs['units'] = 'mm hr-1'
+    ds['PET_hargreaves'].attrs['units'] = 'mm hr-1'
+
+    ds['TMP_2maboveground'].encoding = {'dtype': 'float64'}
+
     # 6. NOW it is safe to drop the coordinates
     ds = ds.drop_vars(['time', 'catchment-id'])
 
@@ -107,4 +119,46 @@ def transform_dataset(ds_in):
 formatted_ds = transform_dataset(camels_xr)
 
 # save to nc
-formatted_ds.to_netcdf(out_path)
+formatted_ds.to_netcdf(
+    out_path,
+    format='NETCDF4',
+    engine='netcdf4',
+)
+
+
+def verify_integrity(original_path, new_path, t_start, t_end, n_cat):
+    """Verify that the data transformation preserved integrity."""
+    print("Verifying data integrity...")
+    ds_old = xr.open_dataset(original_path)
+    ds_new = xr.open_dataset(new_path)
+
+    # Slice old dataset exactly like the new one for comparison
+    ds_old_sub = ds_old.isel(gauge=slice(0, n_cat)).sel(time=slice(t_start, t_end))
+
+    # 1. Verify Precipitation (Direct Copy Check)
+    # Using strict equality because no math was done on P
+    np.testing.assert_array_equal(
+        ds_old_sub['P'].values,
+        ds_new['precip_rate'].values,
+        err_msg="Precipitation values drifted!",
+    )
+    print("✓ Precipitation matches exactly.")
+
+    # 2. Verify Temperature (Math Check)
+    # Allow float32 epsilon tolerance (approx 1e-6)
+    expected_temp = ds_old_sub['T'].values
+    print(ds_old_sub['T'].sel(time='2008-01-09T00:00:00')[0].item())
+    print((ds_new['TMP_2maboveground'].values - 273.15)[0][0].item())
+    np.testing.assert_allclose(
+        expected_temp,
+        ds_new['TMP_2maboveground'].values - 273.15,
+        rtol=1e-16,
+        err_msg="Temperature math introduced errors!",
+    )
+    print("✓ Temperature conversion matches within float64 tolerance.")
+
+    print("SUCCESS: No numerical discrepancies detected.")
+
+
+# # Run verification
+# verify_integrity(camels_path, out_path, t_start, t_end, n_cat)

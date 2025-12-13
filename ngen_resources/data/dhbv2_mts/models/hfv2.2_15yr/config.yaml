@@ -8,7 +8,7 @@ do_tune: false  # python -m dmg +tune=true
 multimodel_type: none  # none, nn_parallel, nn_sequential
 seed: 42
 cache_states: true
-device: cpu
+device: cuda
 gpu_id: 0
 
 
@@ -17,7 +17,7 @@ data_sampler: MtsHydroSampler
 trainer: MtsTrainer
 
 save_path: .
-model_dir: models/hfv2.2_15yr/dhbv_2_mts_ep30.pt  # The trained dHBV 2.0 model (+ input data) can be downloaded from: https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/dHBV_2_MTS_trained.zip
+model_dir: models/hfv2.2_15yr/  # The trained dHBV 2.0 model (+ input data) can be downloaded from: https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/dHBV_2_MTS_trained.zip
 
 
 ## Training ------------------------------#
