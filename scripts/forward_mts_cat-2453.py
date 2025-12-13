@@ -76,13 +76,14 @@ for t in range(t_steps):
     model.get_value('land_surface_water__runoff_volume_flux', dest_array)
     runoff = dest_array[-1]
 
-    log.info(
-        f"Result: Streamflow at time {model.get_current_time()} ({model.get_time_units()}) is {runoff:.4f} m3/s",
-    )
+    if t > 24 * 358:
+        log.info(
+            f"Result: Streamflow at time {model.get_current_time()} ({model.get_time_units()}) is {runoff:.4f} m3/s",
+        )
 
-    if t > 100:
-        log.info("Threshold: Exiting")
-        break
+    # if t > 100:
+    #     log.info("Threshold: Exiting")
+    #     break
 
 ### BMI finalization ###
 log.info("Finalizing BMI")

@@ -194,6 +194,7 @@ class MtsDeltaModelBmi(Bmi):
         self._model = None
         self._states = None
         self._initialized = False
+        self._is_warm = False
         self._timestep = 0
         self._start_time = 0.0
         self._end_time = np.finfo('d').max
@@ -205,6 +206,7 @@ class MtsDeltaModelBmi(Bmi):
         self.req_daily_history = 351  # 351d of daily data
         self.req_hourly_history = 168  # 7d/168hr of hourly data
         self.warmup_frequency = 168  # How often to run warmup (every 7d/168hr)
+        self._steps_since_warmup = 0
 
         # Cache buffers
         self._hourly_buffer = []  # Sliding window of 168hr
@@ -289,7 +291,7 @@ class MtsDeltaModelBmi(Bmi):
         self.external_dtype = eval(self.bmi_config['dtype'])
         self.internal_dtype = self.model_config['dtype']
         self._model = self._load_model().to(self.device)
-        self._load_states()
+        # self._load_states()
 
         self._initialized = True
         if self.verbose:
@@ -309,46 +311,48 @@ class MtsDeltaModelBmi(Bmi):
         # 2. Check if we have enough history to run a prediction.
         #    (We need at least 351 days + 168 hours of data to do first warmup).
         if self._can_run_warmup():
-            # Periodic warmup trigger (start of week logic)
-            # Check if this is the specific step to reset/prime states:
+            # --- WARMUP ---
             if self._is_warmup_trigger_step():
+                self._model.dpl_model.phy_model.use_from_cache = False
+
                 if self.verbose:
-                    log.info(
-                        f"Step {self._timestep}: Running State Warmup (History -> t-1)",
-                    )
+                    log.info(f"Step {self._timestep}: Running Warmup")
 
                 # Prepare batch data (excludes current timestep)
-                # We want the 168 hours before now to prime the state.
                 warmup_dict = self._prepare_input_dict(mode='warmup')
 
                 # Run batch forward purely for side-effect: priming self.states
-                with torch.no_grad():
-                    self._model.dpl_model(warmup_dict)
+                self._do_forward(warmup_dict, batched=True)
 
-            # Standard forward pass (single current timestep)
-            # Run prediction for current hour using either fresh primed states
-            # or states carried over from t-1.
-            step_dict = self._prepare_input_dict(mode='step')
-            predictions = self._do_forward(step_dict)
-            self._format_outputs(predictions)
+                self._is_warm = True
+                self._steps_since_warmup = 0
+
+            # --- STEP ---
+            if self._is_warm:
+                self._model.dpl_model.phy_model.use_from_cache = True
+
+                # Standard forward pass (single current timestep)
+                # Run prediction for current hour using either fresh primed states
+                # or states carried over from t-1.
+                step_dict = self._prepare_input_dict(mode='step')
+                predictions = self._do_forward(step_dict, batched=False)
+
+                self._format_outputs(predictions)
+                self._steps_since_warmup += 1
+            else:
+                self._set_empty_outputs()
 
         else:
-            # 3. Cold start phase
-            #    Buffers are not full yet. Return zeros.
+            # Buffers are not full yet. Return zeros.
             if self.verbose and (self._timestep % 24 == 0):
-                log.info(
-                    f"Step {self._timestep}: Warming up buffers... (No prediction)",
-                )
+                log.info(f"Step {self._timestep}: Filling buffers...")
             self._set_empty_outputs()
 
         self._timestep += 1
 
         # Track BMI runtime
-        self.proc_time += time.time() - t_start
         if self.verbose:
-            log.info(
-                f"BMI Update took {time.time() - t_start:.4f} s | Total runtime: {self.proc_time:.4f} s",
-            )
+            self.proc_time += time.time() - t_start
 
     def update_until(self, end_time: float) -> None:
         """(Control function) Update model until a particular time.
@@ -407,14 +411,14 @@ class MtsDeltaModelBmi(Bmi):
     def _update_caches(self, raw_forcing: np.ndarray) -> None:
         """Manages the rolling windows.
 
-        raw_forcing shape: (n_vars, 1, n_catchments)
+        raw_forcing shape: (time=1, space nvars)
         """
         # 1. Add to hourly buffer
         self._hourly_buffer.append(raw_forcing)
 
         # Maintain hourly buffer size
         # keep exactly what's needed for the 7d/168hr warmup + current
-        if len(self._hourly_buffer) > self.req_hourly_history:
+        if len(self._hourly_buffer) - 1 > self.req_hourly_history:
             self._hourly_buffer.pop(0)
 
         # 2. Add to day accumulator
@@ -423,18 +427,18 @@ class MtsDeltaModelBmi(Bmi):
         # 3. Check if 24 hours have passed to create a daily entry
         if len(self._current_day_accumulator) == 24:
             # Aggregate: take mean across time dimension
-            day_stack = np.concatenate(self._current_day_accumulator, axis=1)
+            day_stack = np.concatenate(self._current_day_accumulator, axis=0)
             daily_mean = np.mean(
                 day_stack,
-                axis=1,
+                axis=0,
                 keepdims=True,
-            )  # [24, Num_Vars, 1, Catchments] -> [Num_Vars, 1, Catchments]
+            )  # [nt=24, space, nvar] -> [nt=1, space, nvar]
 
             self._daily_buffer.append(daily_mean)
             self._current_day_accumulator = []  # Reset accumulator
 
-            # Maintain daily buffer size (keep exactly 351 days)
-            if len(self._daily_buffer) > self.req_daily_history:
+            # Maintain daily buffer size (keep 351 warmup + 1 current day)
+            if len(self._daily_buffer) - 1 > self.req_daily_history:
                 self._daily_buffer.pop(0)
 
     def _prepare_input_dict(self, mode='step') -> dict:
@@ -452,24 +456,24 @@ class MtsDeltaModelBmi(Bmi):
             # CASE 1: BATCH WARMUP
             # We want history UP TO the current step, but NOT including it.
             # Slice: [-169 : -1] -> The 168 hours prior to current
-            raw_hourly = np.concatenate(raw_hourly_list[-169:-1], axis=1)
+            raw_hourly = np.concatenate(raw_hourly_list[0:-1], axis=0)
 
             # Daily: Just take the full available daily history (up to 351)
             # **Since daily buffer only updates every 24h, it naturally lags
             # correctly behind the current hourly-only window.
-            raw_daily = np.concatenate(raw_daily_list, axis=1)
+            raw_daily = np.concatenate(raw_daily_list, axis=0)
 
         else:
             # CASE 2: SINGLE STEP INFERENCE
             # We want ONLY the current timestep.
             # Slice: [-1] -> The very last entry we just added.
-            raw_hourly = np.concatenate(raw_hourly_list[-1:], axis=1)
+            raw_hourly = np.concatenate(raw_hourly_list[-1:], axis=0)
 
             # For daily input during a single hourly step, we usually repeat
             # the last known daily value or use zeros if architecture implies.
             # Assuming the model handles the daily/hourly mismatch via the daily input tensor:
             if len(raw_daily_list) > 0:
-                raw_daily = np.concatenate(raw_daily_list[-1:], axis=1)
+                raw_daily = np.concatenate(raw_daily_list[-1:], axis=0)
             else:
                 raw_daily = np.zeros_like(raw_hourly)
 
@@ -483,21 +487,13 @@ class MtsDeltaModelBmi(Bmi):
         )
 
         # 4. Construct input tensors
-        x_nn_norm_high_freq = (
-            torch.from_numpy(x_norm_hourly).permute(2, 1, 0).to(self.internal_dtype)
-        )
-        x_nn_norm_low_freq = (
-            torch.from_numpy(x_norm_daily).permute(2, 1, 0).to(self.internal_dtype)
-        )
+        x_nn_norm_high_freq = torch.from_numpy(x_norm_hourly).to(self.internal_dtype)
+        x_nn_norm_low_freq = torch.from_numpy(x_norm_daily).to(self.internal_dtype)
 
-        x_phy_high_freq = (
-            torch.from_numpy(raw_hourly).permute(2, 1, 0).to(self.internal_dtype)
-        )
-        x_phy_low_freq = (
-            torch.from_numpy(raw_daily).permute(2, 1, 0).to(self.internal_dtype)
-        )
+        x_phy_high_freq = torch.from_numpy(raw_hourly).to(self.internal_dtype)
+        x_phy_low_freq = torch.from_numpy(raw_daily).to(self.internal_dtype)
 
-        # Append static attributes to dynamic inputs if architecture requires (Concatenation)
+        # Append static attributes to dynamic inputs
         c_nn_expanded1 = c_nn_norm.unsqueeze(0).repeat(
             x_nn_norm_high_freq.shape[0],
             1,
@@ -539,8 +535,8 @@ class MtsDeltaModelBmi(Bmi):
         std = np.asarray(self.norm_stats['std'][stat_key], dtype=np.float32)
 
         while mean.ndim < data.ndim:
-            mean = mean[..., np.newaxis]
-            std = std[..., np.newaxis]
+            mean = mean[np.newaxis, ...]
+            std = std[np.newaxis, ...]
 
         return (data - mean) / (std + self.eps)
 
@@ -553,11 +549,10 @@ class MtsDeltaModelBmi(Bmi):
         hourly_forcing = []
         for var in var_x_list:
             # Map name, get value, expand dims to (1, Catchments)
-            val = self._dynamic_var[map_to_external(var)]['value']
-            hourly_forcing.append(np.expand_dims(val, axis=0))
+            val = self._dynamic_var[map_to_external(var)]['value']  # [time, space]
+            hourly_forcing.append(val)
 
-        # Result shape: (Vars, 1, Catchments)
-        return np.stack(hourly_forcing, axis=0)
+        return np.stack(hourly_forcing, axis=-1)  # [time, space, vars]
 
     def _get_static_tensors(self):
         """Helper to get static attributes."""
@@ -598,7 +593,7 @@ class MtsDeltaModelBmi(Bmi):
                     axis=-1,
                 ),
             )
-        attr = np.concatenate(attr, axis=-1)
+        attr = np.stack(attr, axis=-1)
 
         attr_rout = []
         for var in var_c_list2:
@@ -608,7 +603,7 @@ class MtsDeltaModelBmi(Bmi):
                     axis=-1,
                 ),
             )
-            attr_rout = np.concatenate(attr_rout, axis=-1)
+        attr_rout = np.stack(attr_rout, axis=-1)
 
         attr_norm = (attr - mean_attr) / (std_attr + self.eps)
         attr_norm_rout = (attr_rout - mean_attr_rout) / (std_attr_rout + self.eps)
@@ -650,14 +645,31 @@ class MtsDeltaModelBmi(Bmi):
         to slice [-freq:-1].
         """
         freq = self.warmup_frequency
-        steps_active = self._timestep
+        steps_active = self._steps_since_warmup
 
-        # Check if buffer has history + current (needs > freq)
+        # Check if buffer has history + current
         if len(self._hourly_buffer) <= freq:
             return False
 
         # Every freq steps after:
         return (steps_active % freq) == 0
+
+    def _can_run_warmup(self) -> bool:
+        """
+        Check if buffers have enough history to support a warmup run.
+
+        Requires:
+        - 351 days of daily history
+        - 168 hours of hourly history
+        """
+        daily_ready = len(self._daily_buffer) >= self.req_daily_history
+        hourly_ready = len(self._hourly_buffer) >= self.req_hourly_history
+
+        return daily_ready and hourly_ready
+
+    # =========================================================================#
+    # Helper functions
+    # =========================================================================#
 
     def _set_empty_outputs(self):
         """Set output vars to 0 during warmup phase."""
@@ -670,55 +682,53 @@ class MtsDeltaModelBmi(Bmi):
             # Get size from a known variable
             self._output_vars[name]['value'] = np.zeros(n_units)
 
-    # =========================================================================#
-    # Helper functions
-    # =========================================================================#
-
-    def _do_forward(self, data_dict: dict[str, Any]):
+    def _do_forward(
+        self,
+        data_dict: dict[str, Any],
+        batched: bool = True,
+    ) -> dict[str, NDArray]:
         """Forward model on the pre-formatted dictionary."""
         with torch.no_grad():
-            if (self._timestep != 0) and (
-                self._timestep % self.max_rolling_window == 0
-            ):
-                # Run new state warmup
-                _ = self._model.dpl_model(self._warmup_data_dict)
-
-            prediction = self._model.dpl_model(data_dict)
-            prediction = {
+            prediction = self._model.dpl_model(data_dict, batched=batched)
+            output = {
                 'streamflow': prediction['Qs'].detach().cpu().numpy(),
             }
-        return prediction
+        return output
 
     def _load_model(self) -> MtsModelHandler:
         """Load a pre-trained model based on the configuration."""
         try:
             model = MtsModelHandler(self.model_config, verbose=self.verbose)
             model.dpl_model.eval()
+            model.dpl_model.nn_model.lstm_mlp2.cache_states = True
+
             model.dpl_model.phy_model.lof_from_cache = True
+            model.dpl_model.phy_model.load_from_cache = True
 
             model.dpl_model.phy_model.high_freq_model.dt = 1
+            model.dpl_model.phy_model.low_freq_model.cache_states = True
             model.dpl_model.phy_model.high_freq_model.cache_states = True
             model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e
 
-    def _load_states(self) -> None:
-        """Load saved model states if specified in BMI config."""
-        if self._states is None:
-            path = os.path.join(
-                self.model_config['model_dir'],
-                '..',
-                self.bmi_config['states_name'],
-            )
-            self._states = torch.load(os.path.abspath(path))
-            try:
-                self._model.dpl_model.phy_model.load_states(self._states)
-                self._model.dpl_model.phy_model.low_freq_model.load_states(
-                    self._states[0],
-                )
-            except RuntimeError as e:
-                raise RuntimeError(f"Failed to load model states: {e}") from e
+    # def _load_states(self) -> None:
+    #     """Load saved model states if specified in BMI config."""
+    #     if self._states is None:
+    #         path = os.path.join(
+    #             self.model_config['model_dir'],
+    #             '..',
+    #             self.bmi_config['states_name'],
+    #         )
+    #         self._states = torch.load(os.path.abspath(path))
+    #         try:
+    #             self._model.dpl_model.phy_model.load_states(self._states)
+    #             self._model.dpl_model.phy_model.low_freq_model.load_states(
+    #                 self._states[0],
+    #             )
+    #         except RuntimeError as e:
+    #             raise RuntimeError(f"Failed to load model states: {e}") from e
 
     def _format_outputs(self, outputs):
         """Format model outputs as BMI outputs."""
@@ -846,7 +856,8 @@ class MtsDeltaModelBmi(Bmi):
     def get_value(self, var_name: str, dest: NDArray):
         """Return copy of variable values."""
         try:
-            tmp = self.get_value_ptr(var_name)[self._timestep - 1,].flatten()
+            # tmp = self.get_value_ptr(var_name)[self._timestep - 1,].flatten()
+            tmp = self.get_value_ptr(var_name).flatten()
             dest[:] = self._to_external_units(var_name, tmp.tolist())
         except RuntimeError as e:
             raise e
@@ -857,104 +868,6 @@ class MtsDeltaModelBmi(Bmi):
         tmp = self.get_value_ptr(var_name).take(indices)
         dest[:] = self._to_external_units(var_name, tmp.tolist())
         return dest
-
-    def get_component_name(self):
-        """Name of the component."""
-        return self._name
-
-    def get_input_item_count(self):
-        """Get names of input variables."""
-        return len(self._dynamic_var)
-
-    def get_output_item_count(self):
-        """Get names of output variables."""
-        return len(self._output_vars)
-
-    def get_input_var_names(self):
-        """Get names of input variables."""
-        return list(self._dynamic_var.keys())
-
-    def get_output_var_names(self):
-        """Get names of output variables."""
-        return list(self._output_vars.keys())
-
-    def get_grid_shape(self, grid_id, shape):
-        """Number of rows and columns of uniform rectilinear grid."""
-        raise NotImplementedError("get_grid_shape")
-
-    def get_grid_spacing(self, grid_id, spacing):
-        """Spacing of rows and columns of uniform rectilinear grid."""
-        raise NotImplementedError("get_grid_spacing")
-
-    def get_grid_origin(self, grid_id, origin):
-        """Origin of uniform rectilinear grid."""
-        raise NotImplementedError("get_grid_origin")
-
-    def get_grid_type(self, grid_id):
-        """Type of grid."""
-        if grid_id == 0:
-            return "scalar"
-        raise RuntimeError(f"unsupported grid type: {grid_id!s}. only support 0")
-
-    def get_start_time(self):
-        """Start time of model."""
-        return self._start_time
-
-    def get_end_time(self):
-        """End time of model."""
-        return self._end_time
-
-    def get_current_time(self):
-        """Current time of model."""
-        return self._timestep * self._att_map["time_step_size"] + self._start_time
-
-    def get_time_step(self):
-        """Time step size of model."""
-        return self._att_map["time_step_size"]
-
-    def get_time_units(self):
-        """Time units of model."""
-        return self._att_map["time_units"]
-
-    def get_grid_edge_count(self, grid):
-        """Get grid edge count."""
-        raise NotImplementedError("get_grid_edge_count")
-
-    def get_grid_edge_nodes(self, grid, edge_nodes):
-        """Get grid edge nodes."""
-        raise NotImplementedError("get_grid_edge_nodes")
-
-    def get_grid_face_count(self, grid):
-        """Get grid face count."""
-        raise NotImplementedError("get_grid_face_count")
-
-    def get_grid_face_nodes(self, grid, face_nodes):
-        """Get grid face nodes."""
-        raise NotImplementedError("get_grid_face_nodes")
-
-    def get_grid_node_count(self, grid):
-        """Get grid node count."""
-        raise NotImplementedError("get_grid_node_count")
-
-    def get_grid_nodes_per_face(self, grid, nodes_per_face):
-        """Get grid nodes per face."""
-        raise NotImplementedError("get_grid_nodes_per_face")
-
-    def get_grid_face_edges(self, grid, face_edges):
-        """Get grid face edges."""
-        raise NotImplementedError("get_grid_face_edges")
-
-    def get_grid_x(self, grid, x):
-        """Get grid x-coordinates."""
-        raise NotImplementedError("get_grid_x")
-
-    def get_grid_y(self, grid, y):
-        """Get grid y-coordinates."""
-        raise NotImplementedError("get_grid_y")
-
-    def get_grid_z(self, grid, z):
-        """Get grid z-coordinates."""
-        raise NotImplementedError("get_grid_z")
 
     @staticmethod
     def _set_value_internal(
