@@ -705,7 +705,6 @@ class MtsDeltaModelBmi(Bmi):
             model.dpl_model.phy_model.lof_from_cache = True
             model.dpl_model.phy_model.load_from_cache = True
 
-            model.dpl_model.phy_model.high_freq_model.dt = 1
             model.dpl_model.phy_model.low_freq_model.cache_states = True
             model.dpl_model.phy_model.high_freq_model.cache_states = True
             model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
