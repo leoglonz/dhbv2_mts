@@ -8,7 +8,7 @@ do_tune: false  # python -m dmg +tune=true
 multimodel_type: none  # none, nn_parallel, nn_sequential
 seed: 42
 cache_states: true
-device: cuda
+device: cpu
 gpu_id: 0
 
 
