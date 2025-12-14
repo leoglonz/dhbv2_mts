@@ -85,7 +85,7 @@ _output_vars = [
 _var_name_internal_map = {
     # ----------- Dynamic inputs -----------
     'P': 'atmosphere_water__liquid_equivalent_precipitation_rate',
-    'Temp': 'land_surface_air__temperature',
+    'T': 'land_surface_air__temperature',
     'PET': 'land_surface_water__potential_evaporation_volume_flux',
     # ----------- Static inputs -----------
     'aridity': 'ratio__mean_potential_evapotranspiration__mean_precipitation',
@@ -286,10 +286,13 @@ class MtsDeltaModelBmi(Bmi):
         self.current_time = self.bmi_config.get('start_time', self._start_time)
         self._end_time = self.bmi_config.get('end_time', self._end_time)
 
+        # Daily buffer extra size so that daily and hourly buffers don't overlap.
+        self.dbuff = self.req_hourly_history // 24
+
         # Load model
         self.device = self.model_config['device']
         self.external_dtype = eval(self.bmi_config['dtype'])
-        self.internal_dtype = self.model_config['dtype']
+        self.internal_dtype = eval(self.bmi_config['dtype'])
         self._model = self._load_model().to(self.device)
         # self._load_states()
 
@@ -428,18 +431,24 @@ class MtsDeltaModelBmi(Bmi):
         if len(self._current_day_accumulator) == 24:
             # Aggregate: take mean across time dimension
             day_stack = np.concatenate(self._current_day_accumulator, axis=0)
-            daily_mean = np.mean(
-                day_stack,
-                axis=0,
-                keepdims=True,
-            )  # [nt=24, space, nvar] -> [nt=1, space, nvar]
 
-            self._daily_buffer.append(daily_mean)
+            prcp = day_stack[:, :, 0].sum(axis=0)
+            temp = day_stack[:, :, 1].mean(axis=0)
+            pet = day_stack[:, :, 2].sum(axis=0)
+
+            daily_agg = np.expand_dims(np.stack([prcp, temp, pet], axis=-1), axis=1)
+
+            self._daily_buffer.append(daily_agg)
             self._current_day_accumulator = []  # Reset accumulator
 
-            # Maintain daily buffer size (keep 351 warmup + 1 current day)
-            if len(self._daily_buffer) - 1 > self.req_daily_history:
-                self._daily_buffer.pop(0)
+            if not self._is_warm:
+                # Maintain daily buffer size (keep 351 warmup + 1 current day)
+                if len(self._daily_buffer) - 1 > self.req_daily_history + self.dbuff:
+                    self._daily_buffer.pop(0)
+            else:
+                # Maintain daily buffer size during warm operation
+                if len(self._daily_buffer) > self.req_daily_history + self.dbuff:
+                    self._daily_buffer.pop(0)
 
     def _prepare_input_dict(self, mode='step') -> dict:
         """
@@ -461,7 +470,7 @@ class MtsDeltaModelBmi(Bmi):
             # Daily: Just take the full available daily history (up to 351)
             # **Since daily buffer only updates every 24h, it naturally lags
             # correctly behind the current hourly-only window.
-            raw_daily = np.concatenate(raw_daily_list, axis=0)
+            raw_daily = np.concatenate(raw_daily_list[0 : -self.dbuff], axis=0)
 
         else:
             # CASE 2: SINGLE STEP INFERENCE
@@ -632,12 +641,6 @@ class MtsDeltaModelBmi(Bmi):
     # Logic Helpers
     # =========================================================================#
 
-    def _can_run_prediction(self) -> bool:
-        """Do we have enough cached history to run warmup."""
-        return (len(self._daily_buffer) >= self.req_daily_history) and (
-            len(self._hourly_buffer) >= self.req_hourly_history
-        )
-
     def _is_warmup_trigger_step(self) -> bool:
         """Trigger if we are at the start of a 7-day (freq=168 hour) cycle.
 
@@ -651,6 +654,10 @@ class MtsDeltaModelBmi(Bmi):
         if len(self._hourly_buffer) <= freq:
             return False
 
+        # Check if at a daily boundary
+        if self._timestep % 24 != 0:
+            return False
+
         # Every freq steps after:
         return (steps_active % freq) == 0
 
@@ -662,7 +669,7 @@ class MtsDeltaModelBmi(Bmi):
         - 351 days of daily history
         - 168 hours of hourly history
         """
-        daily_ready = len(self._daily_buffer) >= self.req_daily_history
+        daily_ready = len(self._daily_buffer) >= self.req_daily_history + self.dbuff
         hourly_ready = len(self._hourly_buffer) >= self.req_hourly_history
 
         return daily_ready and hourly_ready
@@ -699,14 +706,16 @@ class MtsDeltaModelBmi(Bmi):
         """Load a pre-trained model based on the configuration."""
         try:
             model = MtsModelHandler(self.model_config, verbose=self.verbose)
+            model.load_model(epoch=self.model_config['test']['test_epoch'])
             model.dpl_model.eval()
+
             model.dpl_model.nn_model.lstm_mlp2.cache_states = True
+            model.dpl_model.phy_model.low_freq_model.cache_states = True
+            model.dpl_model.phy_model.high_freq_model.cache_states = True
 
             model.dpl_model.phy_model.lof_from_cache = True
             model.dpl_model.phy_model.load_from_cache = True
 
-            model.dpl_model.phy_model.low_freq_model.cache_states = True
-            model.dpl_model.phy_model.high_freq_model.cache_states = True
             model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
             return model
         except Exception as e:
@@ -754,7 +763,6 @@ class MtsDeltaModelBmi(Bmi):
         """Load normalization statistics."""
         path = os.path.join(
             self.model_config["model_dir"],
-            "..",
             "normalization_statistics.json",
         )
         try:
