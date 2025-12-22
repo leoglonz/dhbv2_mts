@@ -15,9 +15,9 @@ from 2009-01-01 using the provided data.
 import logging
 import os
 from pathlib import Path
-import pandas as pd
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from dhbv2.mts_bmi import MtsDeltaModelBmi as Bmi
@@ -106,4 +106,6 @@ model.finalize()
 if SAVE_OUTPUT:
     log.info(f"Saving output to {SAVE_PATH}")
     os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
-    np.save(SAVE_PATH, np.array(runoff_sim))
+
+    # Remove spinup period (first 8592 hours)
+    np.save(SAVE_PATH, np.array(runoff_sim)[8592:])

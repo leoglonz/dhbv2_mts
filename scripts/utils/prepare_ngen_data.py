@@ -6,11 +6,12 @@ Mirrors structure of ./ngen/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 2
 @leoglonz
 """
 
+import os
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import xarray as xr
-import os
-from pathlib import Path
 
 # Setup pathing
 pkg_root = Path(__file__).parent.parent.parent
@@ -21,7 +22,10 @@ t_start = '2008-01-09 00:00:00'
 t_end = '2010-12-30 23:00:00'
 
 data_path = '/gpfs/yxs275/data/hourly/CAMELS_HF/forcing/forcing_1990_2018_gauges_hourly_00000_00499.nc'
-out_path = os.path.join(pkg_root, f"ngen_resources/data/forcing/camels_{t_start.replace(':', '_').replace(' ', '_')}_{t_end.replace(':', '_').replace(' ', '_')}.nc")
+out_path = os.path.join(
+    pkg_root,
+    f"ngen_resources/data/forcing/camels_{t_start.replace(':', '_').replace(' ', '_')}_{t_end.replace(':', '_').replace(' ', '_')}.nc",
+)
 
 camels_xr = xr.open_dataset(data_path)
 
