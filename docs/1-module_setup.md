@@ -45,8 +45,12 @@ Do this if you plan to use the BMI(s) on their own or develop on this module.
 
     ```bash
     uv pip install .
+
     # or with development dependencies
     uv pip install .[dev]
+
+    # or in editable mode
+    uv pip install -e .
     ```
 
 4. Add model weights:
@@ -60,12 +64,12 @@ Do this if you plan to use the BMI(s) on their own or develop on this module.
     ```bash
     cd dhbv2
 
-    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2.zip . --no-sign-request
+    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2.zip ./temp/ --no-sign-request
 
-    unzip dhbv_2.zip -d /temp
+    unzip ./temp/dhbv_2.zip -d ./temp
 
-    mv /temp/dhbv_2/. /ngen_resources/data/dhbv2/model/
-    rm -r /temp
+    mv ./temp/dhbv_2/ ./ngen_resources/data/dhbv2/model/
+    rm -r ./temp
     ```
 
     or install [from your browser](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/owp/dhbv_2.zip) (slower) and move contents to `/ngen_resources/data/dhbv2/model/`.
@@ -75,12 +79,12 @@ Do this if you plan to use the BMI(s) on their own or develop on this module.
     ```bash
     cd dhbv2
 
-    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip . --no-sign-request
+    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip ./temp/ --no-sign-request
 
-    unzip dhbv_2_mts.zip -d /temp
+    unzip ./temp/dhbv_2_mts.zip -d ./temp
 
-    mv /temp/dhbv_2_mts/. /ngen_resources/data/dhbv2_mts/model/
-    rm -r /temp
+    mv ./temp/dhbv_2_mts/ ./ngen_resources/data/dhbv2_mts/model/
+    rm -r ./temp
     ```
 
     or install [from your browser](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/owp/dhbv_2_mts.zip) (slower) and move contents to `/ngen_resources/data/dhbv2_mts/model/`.

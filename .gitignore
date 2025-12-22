@@ -186,3 +186,4 @@ awi_forcings*
 dhbv_forcings*
 model/
 !model/README.md
+output/
