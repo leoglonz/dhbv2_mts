@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dhbv2"
-description = "NextGen-compatible hourly δHBV 2.0 rainfall-runoff model."
+description = "NextGen-compatible δHBV2.0 rainfall-runoff module."
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [

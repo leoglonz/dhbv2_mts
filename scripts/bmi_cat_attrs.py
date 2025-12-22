@@ -9,7 +9,7 @@ in the CONUS HF.
 import xarray as xr
 from ruamel.yaml import YAML
 
-CAT = 2453
+CAT = 16867
 attrs_path = '/projects/mhpi/yxs275/hourly_model/mtsHBV/data/CAMELS_HFs_attr_new.nc'
 target_path = f'/projects/mhpi/leoglonz/ciroh-ua/dhbv2_mts/ngen_resources/data/dhbv2_mts/config/bmi_cat-{CAT}.yaml'
 
