@@ -1,7 +1,7 @@
 """
 Forward BMI on single catchment with pseudo-NextGen operating behavior.
 
-We use catchment CAMELS catchements included in the example forcing file ./ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2015-12-30_23_00_00.nc.
+We use catchment 67 which is included with NOAA-OWP/ngen.
 
 @leoglonz
 """
@@ -10,7 +10,6 @@ import logging
 import os
 from pathlib import Path
 import pandas as pd
-import torch
 
 import numpy as np
 import xarray as xr
@@ -21,11 +20,11 @@ log = logging.getLogger('BMI_Demo')
 logging.basicConfig(level=logging.INFO)
 
 ### Configuration Settings (single-catchment) ###
-CAT_ID = 'cat-16867'
-BMI_CONFIG_PATH = f'ngen_resources/data/dhbv2_mts/config/bmi_{CAT_ID}.yaml'
+CAT_ID = 'cat-2453'
+BMI_CONFIG_PATH = 'ngen_resources/data/dhbv2_mts/config/bmi_cat-2453.yaml'
 FORCING_PATH = (
     # 'ngen_resources/data/forcing/camels_2010-01-01_00_00_00_2011-12-30_23_00_00.nc'
-    '/projects/mhpi/leoglonz/ciroh-ua/dhbv2_mts/ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2010-12-30_23_00_00.nc'
+    '/projects/mhpi/leoglonz/ciroh-ua/dhbv2_mts/ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2015-12-30_23_00_00.nc'
 )
 ### ----------------------------------------- ###
 
@@ -91,11 +90,8 @@ for t in range(t_steps):
         log.info(
             f"Result: Streamflow at time {model.get_current_time()} ({model.get_time_units()}) is {runoff_sim[-1]:.4f} m3/s",
         )
-
-path = f"/projects/mhpi/leoglonz/ciroh-ua/dmg/hf_outputs/{CAT_ID}"
-os.makedirs(path, exist_ok=True)
-runoff_sim_array = torch.tensor(runoff_sim)[8592:]  # Skip first year as spinup
-torch.save(runoff_sim_array, os.path.join(path, "ngen_qs.pt"))
+        # runoff_sim_array = torch.tensor(runoff_sim)
+        # torch.save(runoff_sim_array, f'/projects/mhpi/leoglonz/ciroh-ua/dmg/hf_outputs/cat-2543/ngen_qs.pt')
 
 
 ### BMI finalization ###

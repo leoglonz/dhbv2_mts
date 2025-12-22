@@ -12,7 +12,7 @@ import xarray as xr
 
 n_cat = 3
 t_start = '2008-01-09 00:00:00'
-t_end = '2010-12-30 23:00:00'
+t_end = '2015-12-30 23:00:00'
 
 example_path = '/projects/mhpi/leoglonz/ciroh-ua/ciroh-ua-ngen/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 23_00_00.csv'
 camels_path = '/gpfs/yxs275/data/hourly/CAMELS_HF/forcing/forcing_1990_2018_gauges_hourly_00000_00499.nc'
@@ -32,7 +32,7 @@ def transform_dataset(ds_in):
     # --- INSERT SUBSETTING HERE (Before creating new vars or dropping coords) ---
     # Use .isel (index select) for the first 100 catchments
     # Use .sel (label select) for the specific date range
-    ds = ds.isel({'catchment-id': 500})  # slice(0, n_cat)})
+    ds = ds.isel({'catchment-id': slice(0, n_cat)})
     ds = ds.sel(time=slice(t_start, t_end))
     # --------------------------------------------------------------------------
 
