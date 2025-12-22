@@ -1,81 +1,157 @@
-# δHBV 2.0
+# δHBV2.0: A Differentiable Rainfall-Runoff Module for NextGen
 
-[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.9.0-EE4C2C?logo=pytorch)](https://pytorch.org/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.12%20%7C%203.13-blue?labelColor=333333)](https://www.python.org/downloads/)
+[![PyTorch Version](https://img.shields.io/badge/dynamic/json?label=PyTorch&query=info.version&url=https%3A%2F%2Fpypi.org%2Fpypi%2Ftorch%2Fjson&logo=pytorch&color=EE4C2C&logoColor=F900FF&labelColor=333333)](https://pypi.org/project/torch/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&labelColor=333333)](https://github.com/astral-sh/ruff)
 
 ---
 
-First introduced in “High-resolution National-Scale Water Modeling is Enhanced by Multiscale Differentiable Physics-Informed Machine Learning” by Song et al. (2025), δHBV2.0 is the latest-generation differentiable HBV model leveraging intelligent parameterization, big data, and highly-parallelized GPU compute with PyTorch to deliver CONUS-scale, high-resolution inference of HBV parameters and fluxes. (See publication [below](#publication) for details.)
+**δHBV 2.0** is a state-of-the-art, distributed differentiable HBV model leveraging intelligent parameterization, big data, and highly-parallelized GPU compute with PyTorch to deliver CONUS-scale, high-resolution inference of parameters and fluxes.
 
-This repo is an operations-level module for use with NOAA-OWP’s Next Generation National Water Modeling Framework ([NextGen](https://github.com/NOAA-OWP/ngen)) and currently supports δHBV2.0 for both hourly and daily scale simulation.
+This repository serves as an **operations-level module** for NOAA-OWP’s [Next Generation National Water Modeling Framework (NextGen)](https://github.com/NOAA-OWP/ngen). It provides **Basic Model Interface (BMI)** adapters for two modeling modalities:
 
-</br>
-
-## Model Description
-
-δHBV2.0UH is a differentiable model, characterized by the use of an LSTM and MLP to learn parameters for the differentiable physical model HBV2.0, which can fed along with weather forcings (precipitation, temperature, PET) to simulate hydrological states and fluxes (like streamflow) with high spatial resolution. Routing can be done with UH, or with NextGen's internal T-Route integration. In essence, δHBV 2.0UH is a differentiable modeling modality defined by
-
-$$
-    \theta_{d, m}^{1:t} = LSTM( x_m^{1:t}, A_m )
-$$
-
-$$
-    \theta_{s, m} = MLP( A_m )
-$$
-
-$$
-    Q_k^{1:t}, S_k^{1:t} = HBV(x_m^{1:t}, \theta_{d, m}^{1:t}, \theta_{s, m})
-$$
-
-where $\theta_{d, m}^{1:t}$ and $\theta_{d, m}^{1:t}$ are learned dynamic and static HBV parameters, $x_m^{1:t}$ are unit-basin-scale forcings, $A_m$ are unit basin attributes, respectively, $Q_b^{1:t}$ are HBV fluxes (e.g., streamflow), and $S_b^{1:t}$ are HBV states (e.g., snowpack) for unit basins $m\in [1, 2, \ldots, M]$ and coarse gage basins $k\in [1, 2, \ldots, K]$. All model parameters are spatially distinct, but can be learned with time-dependency if desired.
-
-*Note that HBV here differs from the original NumPy version proposed by Beck et al. (2020), with modifications for multiscale training and PyTorch compatibility.*
+1. **δHBV 2.0**: Daily timestep simulation.
+2. **δHBV 2.0 MTS**: Hourly timestep simulation using a Multi-TimeScale (MTS) architecture.
 
 </br>
 
-## Model Development and Training
+## Model Descriptions
 
-δHBV 2.0UH is built on the generic differentiable modeling framework [δMG](https://github.com/mhpi/generic_deltamodel), a successor package to [HydroDL](https://github.com/mhpi/hydroDL) serving as a model testbed intended to accelerate deployment in operational environments. Therefore, while this package includes the physical HBV model, utility code and neural networks are imported from δMG. Note that training codes will be released in δMG at a later time, but we offer an [example script](https://github.com/mhpi/generic_deltamodel/blob/master/example/hydrology/example_dhbv_2.ipynb) demonstrating forward inference on δMG's development backend.
+> Models are built on the generic differentiable modeling framework [δMG](https://github.com/mhpi/generic_deltamodel).
 
-We also provide model training/validation/inference [examples](https://github.com/mhpi/generic_deltamodel/tree/master/example/hydrology) for precursor models δHBV 1.0 and δHBV 1.1p, which give more detail on differentiable model construction in practice.
+### 1. δHBV 2.0 (Daily)
+
+*First introduced by Song et al. (2024) [[1]](#publications).*
+
+The daily model uses an LSTM and MLP to learn parameters for the differentiable physical model HBV 2.0. Weather forcings (precipitation, temperature, PET) and static catchment attributes are used as inputs to simulate hydrological states and fluxes:
+
+$$
+    \begin{align}
+    \theta_{d, m}^{1:t} &= \text{LSTM}( x_m^{1:t}, A_m ) \\
+    \theta_{s, m} &= \text{MLP}( A_m ) \\
+    Q_k^{1:t}, S_k^{1:t} &= \text{HBV}(x_m^{1:t}, \theta_{d, m}^{1:t}, \theta_{s, m})
+    \end{align}
+$$
+
+where:
+
+* $\theta$: Learned dynamic ($d$) and static ($s$) parameters.
+* $x_m, A_m$: Forcings and attributes for unit basin $m$.
+* $Q, S$: Model fluxes (e.g., streamflow) and states (e.g., snowpack).
+
+### 2. δHBV 2.0 MTS (Hourly)
+
+*Introduced by Yang et al. (2025) [[2]](#publications).*
+
+The **Multi-TimeScale (MTS)** variant adapts the architecture for hourly simulation. It incorporates a rolling window input caching mechanism to bridge the gap between long-term hydrologic memory and high-frequency forcing:
+
+* **Caching:** Caches ~351 days of aggregated daily inputs and ~7 days of hourly inputs.
+* **Warmup:** Performs warmup steps using the cache to prime low-frequency (daily) and high-frequency (hourly) model states before generating hourly predictions.
+* **Rolling Window**: After 7 days of hourly simulation, the cache window shifts forward 7 days and the warmup is repeated.
+
+> Note: To run a simulation in NextGen for a given time period, the **prior 358 days** of forcing data must be included in the input to satisfy warmup described above.
+>
+> E.g., simulations starting 01/01/2009 01:00 require an input dataset timeseries starting at 01/08/2008 01:00.
 
 </br>
 
 ## Package Organization
 
-The entirety of this module is intended to be placed in NextGen's `extern/` directory, and contains the following components:
+This package is designed to be installed as a Python dependency or placed in NextGen's `extern/` directory.
 
-- The physical model HBV2.0;
-- Model and data configuration files;
-- δHBV2.0UH BMI to interface with NextGen. (This uses δMG's differentiable modeling pipeline as a backbone to build and forward the complete differentiable model: LSTM & MLP + HBV2.0);
-- BMI configuration files;
-- NextGen realization files;
+```text
+src/dhbv2/
+├── bmi.py          # Daily BMI adapter
+├── mts_bmi.py      # Hourly (MTS) BMI adapter
+├── pet.py          # Utility for PET calculation
+└── utils.py        # Shared utilities
+```
+
+</br>
+
+## NextGen Configuration
+
+To use these models in NextGen, reference the specific class in your realization configuration.
+
+### Daily Simulation
+
+Use `dhbv2.bmi.DeltaModelBmi`.
+
+```json
+{
+    "time_step": 86400,
+    "tag": "ngen_dhbv_daily",
+    "formulation": {
+        "params": {
+            "python_type": "dhbv2.bmi.DeltaModelBmi",
+            "model_type_name": "Differentiable Model",
+            "config_model": "config.yaml",
+            "init_config": "/path/to/bmi_config.yaml",
+            "allow_exceed_end_time": true
+        }
+    }
+}
+```
+
+### Hourly (MTS) Simulation
+
+Use `dhbv2.mts_bmi.MtsDeltaModelBmi.`
+
+```json
+{
+    "time_step": 3600,
+    "tag": "ngen_dhbv_mts",
+    "formulation": {
+        "params": {
+            "python_type": "dhbv2.mts_bmi.MtsDeltaModelBmi",
+            "model_type_name": "未HBV2.0 MTS",
+            "config_model": "mts_config.yaml",
+            "init_config": "/path/to/mts_bmi_config.yaml"
+        }
+    }
+}
+```
 
 </br>
 
 ## Operational Deployment
 
-1. Install [NextGen in a Box](https://github.com/CIROH-UA/NGIAB-CloudInfra) (NGIAB) or the NextGen [prototype](https://github.com/NOAA-OWP/ngen) from NOAA-OWP;
-2. If using NGIAB, compile with docker image.
-3. Clone the `dhbv2` package,
+### Pip Installation
 
-        ```bash
-        git clone https://github.com/mhpi/dhbv2.git
-        ```
+If your NextGen environment supports installing external python packages:
 
-4. Move `dhbv2` to NextGen's `extern/` directory.
-5. Download a demo subset of AORC forcings and Hydrofabric 2.2 basin attributes from [AWS](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/aorc_hydrofabric/ngen_demo.zip). Add this sample data to the `forcings/` directory in NextGen;
-6. Begin Nextgen model forwarding; e.g. `./build/ngen ./data/dhbv_2/spatial/catchment_data_cat-88306.geojson 'cat-88306' ./data/dhbv_2/spatial/nexus_data_nex-87405.geojson 'nex-87405 ./data/dhbv_2/realizations/realization_cat-88306.json`.
+```bash
+pip install .
+# Or directly from git
+pip install git+[https://github.com/mhpi/dhbv2.git](https://github.com/mhpi/dhbv2.git)
+```
+
+### Manual Placement (Standard NextGen Workflow)
+
+1. Environment: Ensure you are running NextGen in a Box or a compiled NextGen prototype.
+
+2. Clone:
+
+    ```bash
+    git clone [https://github.com/mhpi/dhbv2.git](https://github.com/mhpi/dhbv2.git)
+    ```
+
+3. Deploy: Move the dhbv2 directory to NextGen's extern/ folder (or ensure it is in the PYTHONPATH).
+
+4. Data: Download demo AORC forcings and Hydrofabric 2.2 attributes from AWS.
+
+5. Run: Execute the NextGen engine referencing your configuration files.
 
 </br>
 
-## Publication
+## Publications
 
-*Yalan Song, Tadd Bindas, Chaopeng Shen, Haoyu Ji, Wouter Johannes Maria Knoben, Leo Lonzarich, Martyn P. Clark, et al. "High-resolution national-scale water modeling is enhanced by multiscale differentiable physics-informed machine learning." Water Resources Research (2025). <https://agupubs.onlinelibrary.wiley.com/doi/pdf/10.1029/2024WR038928>.*
+1. Song, Y., Bindas, T., Shen, C., Ji, H., Knoben, W. J. M., Lonzarich, L., Clark, M. P., et al. "High-resolution national-scale water modeling is enhanced by multiscale differentiable physics-informed machine learning." Water Resources Research (2025). <https://doi.org/10.1029/2024WR038928>
+
+2. Yang, W., Ji, H., Lonzarich, L., Song, Y., Lawson, K., Shen, C. (2025). **[In Review]**
 
 </br>
 
 ## Issues
 
-For questions, or to report bugs, concerns, etc., please reach out by posting an issue here or on the [𝛿MG repo](https://github.com/mhpi/generic_deltamodel/issues).
+For questions, or to report bugs, please post an issue here or on the [𝛿MG repo](https://github.com/mhpi/generic_deltamodel/issues).
