@@ -33,6 +33,7 @@ The `forward_mts_cat-67.py` script runs the hourly multi-timescale model for a s
 </br>
 
 ## Configuration Files
+
 Standalone runs rely on **BMI config files** (YAML). These define the physics options and point to the static attributes.
 
 Example `bmi_cat-67.yaml`:

@@ -33,7 +33,7 @@ Attribute location: Currently recorded in BMI config. Will later support direct 
 
 ## Forcing Format
 
-**CSV/NetCDF Format (NextGen Standard)**
+### CSV/NetCDF Format (NextGen Standard)
 
 dhbv2 BMI expects a CSV/NetCDF file with minimum attributes:
 
