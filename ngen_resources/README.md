@@ -16,3 +16,7 @@ operation of a BMI standalone.
 
 5. Hydrofabric: Static catchment attributes stored as a geojson or geopkg for the
     catchments included in the forcing data.
+
+# Docker
+
+For running ngen with Docker, copy the Dockerfile into NextGen at `./ngen/docker/`. See instructions in [docs](../docs/4-run_ngen.md) for building and running the ngen image.

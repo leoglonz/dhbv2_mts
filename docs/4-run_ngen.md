@@ -34,9 +34,11 @@ git submodule update --init --recursive
 
 ### 2. NextGen
 
-To build, we recommend using Docker as the [developers suggest](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md):
+To build, we recommend using Docker as the [developers suggest](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md). A [Dockerfile](../ngen_resources/docker/) supporting dhbv2 is included with this repo. Copy this Dockerfile to ngen and build:
 
 ```bash
+cp ./dhbv2/ngen_resources/docker/CENTOS_MHPI_NGEN_RUN.dockerfile ./ngen/docker/
+
 docker build . --build-arg NPROC=8 --file ./docker/CENTOS_MHPI_NGEN_RUN.dockerfile --tag localbuild/ngen:latest --network=host
 ```
 
@@ -93,7 +95,8 @@ docker system prune -f
         }
       ]
     }
-  }
+  },
+  "output_root": "..."
 }
 ```
 
@@ -118,7 +121,8 @@ docker system prune -f
         }
       ]
     }
-  }
+  },
+  "output_root": "..."
 }
 ```
 
@@ -146,6 +150,8 @@ docker run --rm \
     /path/to/nexus_data.geojson "nex-2454" \
     /path/to/realization_cat-2453.json
 ```
+
+> Note: If using Docker, make sure `output_root` in your realization begins with `/app/data/`. This will ensure ngen outputs are accessible outside of your Docker container in `./ngen/data/`.
 
 ## Validation
 
