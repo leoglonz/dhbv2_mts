@@ -247,10 +247,10 @@ class MtsDeltaModelBmi(Bmi):
         # Read model configuration file
         try:
             model_dir = os.path.join(
-                root_path,
-                '..',
-                '..',
-                'ngen_resources/data/dhbv2_mts/',
+                # root_path,
+                # '..',
+                # '..',
+                # 'ngen_resources/data/dhbv2_mts/',
                 self.bmi_config.get('model_path'),
             )
             model_config_path = os.path.join(model_dir, 'config.yaml')
