@@ -9,9 +9,7 @@ import json
 import os
 import time
 from typing import Any, Optional, Union
-import sys
 
-from click import Path
 import numpy as np
 import torch
 import yaml
@@ -20,7 +18,7 @@ from dmg import MtsModelHandler
 from dmg.core.utils.dates import Dates
 from numpy.typing import NDArray
 
-from dhbv2.log import configure_logging, log
+from dhbv2.log import log
 from dhbv2.utils import bmi_array
 
 root_path = os.path.dirname(os.path.abspath(__file__))
@@ -212,8 +210,14 @@ class MtsDeltaModelBmi(Bmi):
         self._current_day_accumulator = []  # Buffer for a single day of 24hr
 
         # Input/output vars
-        self._dynamic_var = self._set_value_internal(_dynamic_input_vars, bmi_array([0.0]))
-        self._static_var = self._set_value_internal(_static_input_vars, bmi_array([0.0]))
+        self._dynamic_var = self._set_value_internal(
+            _dynamic_input_vars,
+            bmi_array([0.0]),
+        )
+        self._static_var = self._set_value_internal(
+            _static_input_vars,
+            bmi_array([0.0]),
+        )
         self._output_vars = self._set_value_internal(_output_vars, bmi_array([0.0]))
 
         # Other
@@ -868,11 +872,11 @@ class MtsDeltaModelBmi(Bmi):
         """Return copy of variable's value array."""
         tmp = self.get_value_ptr(var_name).flatten()
         dest[:] = self._to_external_units(var_name, tmp.tolist())
-        return dest      
+        return dest
 
     def get_value_at_indices(self, var_name, dest, indices):
         """Get values at indices.
-        
+
         NOTE: ngen retrievs values via this method, and does so twice:
         1. to the nexus for routing
         2. for the output writer to save
@@ -884,7 +888,7 @@ class MtsDeltaModelBmi(Bmi):
             log.debug(
                 f" Time {self.get_current_time()} {self.get_time_units()} ({time}, step {self._timestep}) | Runoff {tmp[-1]:.4f} m3/s",
             )
-        
+
         return dest
 
     @staticmethod
