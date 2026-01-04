@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 CAT_ID = 'cat-2453'  # Options: cat-2453, cat-2454, cat-2455
 BMI_CONFIG_PATH = './ngen_resources/data/dhbv2_mts/config/bmi_cat-2453.yaml'
 FORCING_PATH = (
-    './ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2010-12-30_23_00_00.nc'
+    './ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2010-12-30 23_00_00.nc'
 )
 SAVE_OUTPUT = True
 SAVE_PATH = f'./output/dhbv2_mts_hourly_{CAT_ID}_runoff.npy'

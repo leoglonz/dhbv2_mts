@@ -246,13 +246,19 @@ class MtsDeltaModelBmi(Bmi):
 
         # Read model configuration file
         try:
-            model_dir = os.path.join(
-                # root_path,
-                # '..',
-                # '..',
-                # 'ngen_resources/data/dhbv2_mts/',
-                self.bmi_config.get('model_path'),
-            )
+            core_path = self.bmi_config.get('model_path')
+            if os.path.exists(core_path):
+                # Path in ngen
+                model_dir = core_path
+            else:
+                # Path for local testing
+                model_dir = os.path.join(
+                    root_path,
+                    '..',
+                    '..',
+                    'ngen_resources/',
+                    self.bmi_config.get('model_path'),
+                )
             model_config_path = os.path.join(model_dir, 'config.yaml')
             with open(model_config_path) as f:
                 self.model_config = yaml.safe_load(f)
