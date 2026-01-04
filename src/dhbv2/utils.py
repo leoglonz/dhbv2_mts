@@ -3,5 +3,5 @@ from numpy.typing import NDArray
 
 
 def bmi_array(arr: list[float]) -> NDArray:
-    """Wrapper ensure the expected numpy array datatype is used."""
+    """Wrapper to ensure standardized numpy arrays in BMI."""
     return np.array(arr, dtype='float32')
