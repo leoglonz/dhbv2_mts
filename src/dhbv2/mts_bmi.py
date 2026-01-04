@@ -6,11 +6,12 @@ framework.
 """
 
 import json
-import logging
 import os
 import time
 from typing import Any, Optional, Union
+import sys
 
+from click import Path
 import numpy as np
 import torch
 import yaml
@@ -19,13 +20,10 @@ from dmg import MtsModelHandler
 from dmg.core.utils.dates import Dates
 from numpy.typing import NDArray
 
+from dhbv2.log import configure_logging, log
 from dhbv2.utils import bmi_array
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger('MTS_BMI')
-
 root_path = os.path.dirname(os.path.abspath(__file__))
-
 
 # -------------------------------------------- #
 # Dynamic input variables (CSDMS standard names)
@@ -33,7 +31,7 @@ root_path = os.path.dirname(os.path.abspath(__file__))
 _dynamic_input_vars = [
     ('atmosphere_water__liquid_equivalent_precipitation_rate', 'mm h-1'),
     ('land_surface_air__temperature', 'degK'),
-    ('land_surface_water__potential_evaporation_volume_flux', 'mm h-1'),
+    ('water_potential_evaporation_flux', 'mm h-1'),
 ]
 
 # ------------------------------------------- #
@@ -86,7 +84,7 @@ _var_name_internal_map = {
     # ----------- Dynamic inputs -----------
     'P': 'atmosphere_water__liquid_equivalent_precipitation_rate',
     'T': 'land_surface_air__temperature',
-    'PET': 'land_surface_water__potential_evaporation_volume_flux',
+    'PET': 'water_potential_evaporation_flux',
     # ----------- Static inputs -----------
     'aridity': 'ratio__mean_potential_evapotranspiration__mean_precipitation',
     'meanP': 'atmosphere_water__daily_mean_of_liquid_equivalent_precipitation_rate',
@@ -214,14 +212,17 @@ class MtsDeltaModelBmi(Bmi):
         self._current_day_accumulator = []  # Buffer for a single day of 24hr
 
         # Input/output vars
-        self._dynamic_var = self._set_value_internal(_dynamic_input_vars, bmi_array([]))
-        self._static_var = self._set_value_internal(_static_input_vars, bmi_array([]))
-        self._output_vars = self._set_value_internal(_output_vars, bmi_array([]))
+        self._dynamic_var = self._set_value_internal(_dynamic_input_vars, bmi_array([0.0]))
+        self._static_var = self._set_value_internal(_static_input_vars, bmi_array([0.0]))
+        self._output_vars = self._set_value_internal(_output_vars, bmi_array([0.0]))
 
         # Other
         self.norm_stats = None
         self.bmi_config = None
         self.model_config = None
+
+        # Outputs for debugging in ngen
+        # configure_logging('debug')
 
         if self.verbose:
             self.proc_time = time.time() - t_start
@@ -246,13 +247,19 @@ class MtsDeltaModelBmi(Bmi):
 
         # Read model configuration file
         try:
-            model_dir = os.path.join(
-                root_path,
-                '..',
-                '..',
-                'ngen_resources/data/dhbv2_mts/',
-                self.bmi_config.get('model_path'),
-            )
+            core_path = self.bmi_config.get('model_path')
+            if os.path.exists(core_path):
+                # Path in ngen
+                model_dir = core_path
+            else:
+                # Path for local testing
+                model_dir = os.path.join(
+                    root_path,
+                    '..',
+                    '..',
+                    'ngen_resources/',
+                    self.bmi_config.get('model_path'),
+                )
             model_config_path = os.path.join(model_dir, 'config.yaml')
             with open(model_config_path) as f:
                 self.model_config = yaml.safe_load(f)
@@ -301,6 +308,8 @@ class MtsDeltaModelBmi(Bmi):
     def update(self) -> None:
         """(Control function) Advance model state by one time step."""
         t_start = time.time()
+
+        # self.set_value('land_surface_water__runoff_volume_flux', np.array([3.14*self._timestep]))
 
         # 1. Cache raw data (no normalization) to allow daily aggregation.
         raw_forcing_t = self._get_current_forcing_raw()
@@ -776,7 +785,7 @@ class MtsDeltaModelBmi(Bmi):
     def _to_external_units(self, var_name: str, values: list) -> list:
         """Convert internal model units to external units."""
         if var_name == 'atmosphere_water__liquid_equivalent_precipitation_rate':
-            # mm h-1 to m3 s-1  (use catchment area)
+            # mm h-1 --> m3 s-1 (depth to volumetric rate)
             area = self._static_var[map_to_external('catchment__area')]['value']
             return [v * 1000 / 3600 * area for v in values]
         return values
@@ -798,15 +807,15 @@ class MtsDeltaModelBmi(Bmi):
 
     def get_var_type(self, var_name):
         """Data type of variable."""
-        return str(self.get_value_ptr(var_name).dtype)
+        return self.get_value_ptr(var_name).dtype.name
 
-    def get_var_units(self, var_standard_name):
-        """Get units of variable.
+    def get_var_units(self, var_standard_name: str):
+        """Get variable units.
 
         Parameters
         ----------
-        var_standard_name : str
-            Name of variable as CSDMS Standard Name.
+        var_standard_name
+            CSDMS Standard Name of variable.
 
         Returns
         -------
@@ -817,7 +826,7 @@ class MtsDeltaModelBmi(Bmi):
 
     def get_var_nbytes(self, var_name):
         """Get units of variable."""
-        return self.get_value_ptr(var_name).nbytes
+        return self.get_var_itemsize(var_name) * len(self.get_value_ptr(var_name))
 
     def get_var_itemsize(self, name):
         """Get item size of variable."""
@@ -850,25 +859,32 @@ class MtsDeltaModelBmi(Bmi):
         raise RuntimeError(f"unsupported grid size: {grid_id!s}. only support 0")
 
     def get_value_ptr(self, var_standard_name: str) -> np.ndarray:
-        """Reference to values."""
+        """Return reference to variable's value array."""
         return {**self._dynamic_var, **self._static_var, **self._output_vars}[
             var_standard_name
         ]['value']
 
     def get_value(self, var_name: str, dest: NDArray):
-        """Return copy of variable values."""
-        try:
-            # tmp = self.get_value_ptr(var_name)[self._timestep - 1,].flatten()
-            tmp = self.get_value_ptr(var_name).flatten()
-            dest[:] = self._to_external_units(var_name, tmp.tolist())
-        except RuntimeError as e:
-            raise e
-        return dest
+        """Return copy of variable's value array."""
+        tmp = self.get_value_ptr(var_name).flatten()
+        dest[:] = self._to_external_units(var_name, tmp.tolist())
+        return dest      
 
     def get_value_at_indices(self, var_name, dest, indices):
-        """Get values at indices."""
+        """Get values at indices.
+        
+        NOTE: ngen retrievs values via this method, and does so twice:
+        1. to the nexus for routing
+        2. for the output writer to save
+        """
         tmp = self.get_value_ptr(var_name).take(indices)
         dest[:] = self._to_external_units(var_name, tmp.tolist())
+
+        if (self._timestep > 24 * 365) and (self._timestep % 1000 == 0):
+            log.debug(
+                f" Time {self.get_current_time()} {self.get_time_units()} ({time}, step {self._timestep}) | Runoff {tmp[-1]:.4f} m3/s",
+            )
+        
         return dest
 
     @staticmethod
@@ -894,10 +910,10 @@ class MtsDeltaModelBmi(Bmi):
             var_dict[item[0]] = {'value': var_value.copy(), 'units': item[1]}
         return var_dict
 
-    def set_value(self, var_name, values: list):
+    def set_value(self, var_name, values: list) -> None:
         """Set variable value."""
-        if not isinstance(values, list):
-            values = [values]
+        if not isinstance(values, np.ndarray):
+            values = np.array([values])
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if var_name in dict.keys():
                 values = self._to_internal_units(var_name, values)
@@ -907,7 +923,7 @@ class MtsDeltaModelBmi(Bmi):
                 )  # [time, space]
                 break
 
-    def set_value_at_indices(self, name, inds, src):
+    def set_value_at_indices(self, name, inds, src) -> None:
         """Set model values at particular indices."""
         if not isinstance(src, list):
             src = [src]
@@ -919,25 +935,25 @@ class MtsDeltaModelBmi(Bmi):
                     dict[name]['value'][i] = src[i]
                 break
 
-    def get_component_name(self):
+    def get_component_name(self) -> str:
         """Name of the component."""
         return self._name
 
-    def get_input_item_count(self):
+    def get_input_item_count(self) -> int:
         """Get names of input variables."""
         return len(self._dynamic_var)
 
-    def get_output_item_count(self):
+    def get_output_item_count(self) -> int:
         """Get names of output variables."""
         return len(self._output_vars)
 
-    def get_input_var_names(self):
+    def get_input_var_names(self) -> tuple[str, ...]:
         """Get names of input variables."""
-        return list(self._dynamic_var.keys())
+        return tuple(self._dynamic_var.keys())
 
-    def get_output_var_names(self):
+    def get_output_var_names(self) -> tuple[str, ...]:
         """Get names of output variables."""
-        return list(self._output_vars.keys())
+        return tuple(self._output_vars.keys())
 
     def get_grid_shape(self, grid_id, shape):
         """Number of rows and columns of uniform rectilinear grid."""
@@ -967,11 +983,11 @@ class MtsDeltaModelBmi(Bmi):
 
     def get_current_time(self):
         """Current time of model."""
-        return self._timestep * self._att_map["time_step_size"] + self._start_time
+        return self._timestep * self._time_step_size + self._start_time
 
     def get_time_step(self):
         """Time step size of model."""
-        return self._att_map["time_step_size"]
+        return self._time_step_size
 
     def get_time_units(self):
         """Time units of model."""

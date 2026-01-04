@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 CAT_ID = 'cat-2453'  # Options: cat-2453, cat-2454, cat-2455
 BMI_CONFIG_PATH = './ngen_resources/data/dhbv2_mts/config/bmi_cat-2453.yaml'
 FORCING_PATH = (
-    './ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2010-12-30_23_00_00.nc'
+    './ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2010-12-30 23_00_00.nc'
 )
 SAVE_OUTPUT = True
 SAVE_PATH = f'./output/dhbv2_mts_hourly_{CAT_ID}_runoff.npy'
@@ -58,8 +58,8 @@ forcings = ds.sel(ids=CAT_ID)
 t_steps = len(forcings['time'])
 
 # Maintain strict typing of forcing arrays
-precip = forcings['precip_rate'].values.astype(np.float64)
-temp = forcings['TMP_2maboveground'].values.astype(np.float64)
+precip = forcings['precip_rate[mm h-1]'].values.astype(np.float64)
+temp = forcings['TMP_2maboveground[degC]'].values.astype(np.float64)
 pet = forcings['PET_hargreaves'].values.astype(np.float64)
 
 
@@ -80,7 +80,7 @@ for t in range(t_steps):
         temp[t],
     )
     model.set_value(
-        'land_surface_water__potential_evaporation_volume_flux',
+        'water_potential_evaporation_flux',
         pet[t],
     )
 
@@ -108,4 +108,4 @@ if SAVE_OUTPUT:
     os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
 
     # Remove spinup period (first 8592 hours)
-    np.save(SAVE_PATH, np.array(runoff_sim)[8592:])
+    np.save(SAVE_PATH, np.array(runoff_sim)[:])
