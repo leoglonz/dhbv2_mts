@@ -8,7 +8,7 @@ framework.
 import json
 import os
 import time
-from typing import Any, Union
+from typing import Union
 
 import numpy as np
 import torch
@@ -143,7 +143,7 @@ class MtsDeltaModelBmi(Bmi):
     rainfall-runoff model for hydrologic forecasting (Yang et al., 2025; Song
     et al., 2025).
 
-    This is a multitimescale (hourly) version of the δHBV2.0 BMI at
+    A multi-timescale (hourly) version of the δHBV2.0 BMI at
     (dhbv2/bmi.py). MTS uses a daily-scale HBV to warmup states for an
     hourly-scale HBV and utilizes rolling window input caching for 358-day*
     lagged hourly runoff simulation.
@@ -168,6 +168,8 @@ class MtsDeltaModelBmi(Bmi):
     (This may be removed in the future to support direct streaming, but for now
     we maintain a lag for representative model performance.)
 
+    NOTE: This BMI uses both numpy arrays and pytorch tensors for internal
+        computations (dtype is preserved).
     NOTE: At least 351 days of hourly data are required before the first
         model prediction is returned. See above.
     NOTE: BMI can only run forward inference. Training code will be released in
@@ -190,6 +192,9 @@ class MtsDeltaModelBmi(Bmi):
         self._is_warm = False
 
         self._dtype = 'float64'
+        self.device = torch.device('cpu')
+
+        self.n_units = 1
 
         self._time_units = 's'
         self._time_step_size = 3600
@@ -280,7 +285,9 @@ class MtsDeltaModelBmi(Bmi):
         for name in self._static_var.keys():
             ext_name = map_to_internal(name)
             if ext_name in self.bmi_config.keys():
-                self._static_var[name]['value'] = bmi_array(self.bmi_config[ext_name])
+                self._static_var[name]['value'] = self._bmi_array(
+                    self.bmi_config[ext_name],
+                )
             else:
                 log.warning(f"Static variable '{name}' not in BMI config. Skipping.")
 
@@ -291,11 +298,10 @@ class MtsDeltaModelBmi(Bmi):
         )
         self._dtype = self.bmi_config.get('dtype', self._dtype)
         self._set_dtype()
+        self.device = self.model_config.get('device', self.device)
 
         # --- Load model ---
-        self.device = self.model_config['device']
         self._model = self._load_model().to(self.device)
-        # self._load_states()
 
         # --- Buffer initialization ---
         n_vars = self.get_input_item_count()
@@ -305,18 +311,15 @@ class MtsDeltaModelBmi(Bmi):
 
         self._hourly_buffer = RingBuffer(
             (self.req_hourly_history, 1, n_vars),
-            dtype=self.pt_dtype,
-            device=self.device,
+            dtype=self.np_dtype,
         )
         self._daily_buffer = RingBuffer(
             (self.req_daily_history + self.b_offset, 1, n_vars),
-            dtype=self.pt_dtype,
-            device=self.device,
+            dtype=self.np_dtype,
         )
         self._day_accumulator = np.zeros(
             (24, 1, n_vars),
-            dtype=self.pt_dtype,
-            device=self.device,
+            dtype=self.np_dtype,
         )
         self._day_accumulator_ptr = 0
 
@@ -337,7 +340,7 @@ class MtsDeltaModelBmi(Bmi):
         t_start = time.time()
 
         # 1. Cache raw data (no normalization) to allow daily aggregation.
-        forcing = self._get_current_forcing_raw()
+        forcing = self._get_current_forcing()
         self._update_caches(forcing)
 
         # 2. Check if we have enough history to run a prediction.
@@ -351,7 +354,7 @@ class MtsDeltaModelBmi(Bmi):
                     log.info(f"Step {self._timestep}: Running Warmup")
 
                 # Prepare batch data (excludes current timestep)
-                warmup_dict = self._prepare_input_dict(mode='warmup')
+                warmup_dict = self._prepare_input_data(batched=True)
 
                 # Run batch forward purely for side-effect: priming self.states
                 self._do_forward(warmup_dict, batched=True)
@@ -366,7 +369,7 @@ class MtsDeltaModelBmi(Bmi):
                 # Standard forward pass (single current timestep)
                 # Run prediction for current hour using either fresh primed states
                 # or states carried over from t-1.
-                step_dict = self._prepare_input_dict(mode='step')
+                step_dict = self._prepare_input_data(batched=False)
                 predictions = self._do_forward(step_dict, batched=False)
 
                 self._format_outputs(predictions)
@@ -382,7 +385,6 @@ class MtsDeltaModelBmi(Bmi):
 
         self._timestep += 1
 
-        # Track BMI runtime
         if self.verbose:
             self._proc_time += time.time() - t_start
 
@@ -415,11 +417,11 @@ class MtsDeltaModelBmi(Bmi):
         for _ in range(int(n_steps)):
             self.update()
 
-        # Track BMI runtime
-        self._proc_time += time.time() - t_start
         if self.verbose:
+            self._proc_time += time.time() - t_start
             log.info(
-                f"BMI Update Until took {time.time() - t_start:.4f} s | Total runtime: {self._proc_time:.4f} s",
+                f"BMI Update Until took {time.time() - t_start:.4f} s | ",
+                f"Total runtime: {self._proc_time:.4f} s",
             )
 
     def finalize(self) -> None:
@@ -433,7 +435,9 @@ class MtsDeltaModelBmi(Bmi):
             log.info("BMI model finalized.")
 
     # =========================================================================#
+
     # Caching Logic
+
     # =========================================================================#
 
     def _update_caches(self, forcing: NDArray[np.float]) -> None:
@@ -465,59 +469,64 @@ class MtsDeltaModelBmi(Bmi):
             self._daily_buffer.append(daily_agg)
             self._day_accumulator_ptr = 0
 
-    def _prepare_input_dict(self, mode: str = 'step') -> dict[str, NDArray[np.float]]:
+    def _prepare_input_data(
+        self,
+        batched: bool = False,
+    ) -> dict[str, torch.Tensor[torch.float]]:
         """
         Constructs inputs for either history/cache warmup or single-step
         inference and normalizes data on-the-fly.
 
+        All calculations in numpy, converted to torch tensors at the end.
+
         Parameters
         ----------
-        mode
-            'warmup' to prepare batch warmup data, 'step' for single-step
-            inference.
+        batched
+            If True, prepares data for warmup (batch mode).
+            If False, prepares data for single-step inference (sequential).
 
         Returns
         -------
         dict
             Dictionary of input tensors for the model.
         """
-        # (1) Retrieve data from buffers
-        if mode == 'warmup':
+        # --- Retrieve data from buffers ---
+        if batched:
             # CASE 1: BATCH WARMUP
             # Hourly: We want history UP TO the current step, but NOT including it.
-            raw_hourly = self.hourly_history.get_ordered()
+            raw_hourly = self.hourly_buffer.get_ordered()
 
             # Daily: Just take the full available daily history (up to 351)
             # **Since daily buffer only updates every 24h, it naturally lags
             # correctly behind the current hourly window.
-            raw_daily = self.daily_history.get_ordered()
+            raw_daily = self.daily_buffer.get_ordered()
 
         else:
             # CASE 2: SINGLE STEP INFERENCE
             # Hourly: We want ONLY the current timestep (very last entry).
-            raw_hourly = self.hourly_history.get_last()
+            raw_hourly = self.hourly_buffer.get_last()
 
             # Daily: For daily input during a single hourly step, we repeat
             # the last known daily value or use zeros if architecture implies.
-            raw_daily = self.daily_history.get_last()
+            raw_daily = self.daily_buffer.get_last()
 
-        # 2. Normalize
+        # --- Normalize ---
         x_norm_hourly = self._normalize(raw_hourly, 'dyn_input')
         x_norm_daily = self._normalize(raw_daily, 'dyn_input_daily')
 
-        # 3. Format static attributes as tensors
+        # --- Format static variables as tensors ---
         c_nn_norm, rc_nn_norm, outlet_topo, areas, elev_all, ac_all = (
-            self._get_static_tensors()
+            self._get_static_var_tensors()
         )
 
-        # 4. Construct input tensors
-        x_nn_norm_high_freq = torch.from_numpy(x_norm_hourly).to(self.internal_dtype)
-        x_nn_norm_low_freq = torch.from_numpy(x_norm_daily).to(self.internal_dtype)
+        # --- Construct input tensors ---
+        x_nn_norm_high_freq = self._bmi_tensor(x_norm_hourly)
+        x_nn_norm_low_freq = self._bmi_tensor(x_norm_daily)
 
-        x_phy_high_freq = torch.from_numpy(raw_hourly).to(self.internal_dtype)
-        x_phy_low_freq = torch.from_numpy(raw_daily).to(self.internal_dtype)
+        x_phy_high_freq = self._bmi_tensor(raw_hourly)
+        x_phy_low_freq = self._bmi_tensor(raw_daily)
 
-        # Append static attributes to dynamic inputs
+        # Append static variables to dynamic inputs
         c_nn_expanded1 = c_nn_norm.unsqueeze(0).repeat(
             x_nn_norm_high_freq.shape[0],
             1,
@@ -532,31 +541,39 @@ class MtsDeltaModelBmi(Bmi):
         )
         xc_nn_norm_low_freq = torch.cat((x_nn_norm_low_freq, c_nn_expanded2), dim=-1)
 
-        data_dict = {
-            'xc_nn_norm_high_freq': xc_nn_norm_high_freq.to(self.device),
-            'x_phy_high_freq': x_phy_high_freq.to(self.device),
-            'c_nn_norm': c_nn_norm.to(self.device),
-            'rc_nn_norm': rc_nn_norm.to(self.device),
-            'ac_all': ac_all.to(self.device),
-            'elev_all': elev_all.to(self.device),
-            'areas': areas.to(self.device),
-            'outlet_topo': outlet_topo.to(self.device),
-            # Add low freq items for warmup only
-            'xc_nn_norm_low_freq': xc_nn_norm_low_freq.to(self.device)
-            if mode == 'warmup'
-            else None,
-            'x_phy_low_freq': x_phy_low_freq.to(self.device)
-            if mode == 'warmup'
-            else None,
+        return {
+            'xc_nn_norm_high_freq': xc_nn_norm_high_freq,
+            'x_phy_high_freq': x_phy_high_freq,
+            'c_nn_norm': c_nn_norm,
+            'rc_nn_norm': rc_nn_norm,
+            'ac_all': ac_all,
+            'elev_all': elev_all,
+            'areas': areas,
+            'outlet_topo': outlet_topo,
+            # --- Add low freq items for warmup only ---
+            'xc_nn_norm_low_freq': xc_nn_norm_low_freq if batched else None,
+            'x_phy_low_freq': x_phy_low_freq if batched else None,
         }
 
-        return data_dict
+    def _normalize(self, data: NDArray[np.float], name: str) -> NDArray[np.float]:
+        """Normalize model inputs with saved training data statistics.
 
-    def _normalize(self, data: NDArray[np.float], stat_key: str) -> NDArray[np.float]:
-        """Apply (X - Mean) / Std."""
-        # Data is (Vars, Time, Space)
-        mean = np.asarray(self.norm_stats['mean'][stat_key], dtype=np.float32)
-        std = np.asarray(self.norm_stats['std'][stat_key], dtype=np.float32)
+        Gaussian norm: (X - Mean) / Std.
+
+        Parameters
+        ----------
+        data
+            Raw input data to normalize. Shape (time, space, vars).
+        name
+            Name of the variable to normalize.
+
+        Returns
+        -------
+        NDArray
+            Normalized data. Shape (time, space, vars).
+        """
+        mean = np.asarray(self.norm_stats['mean'][name], dtype=self.np_dtype)
+        std = np.asarray(self.norm_stats['std'][name], dtype=self.np_dtype)
 
         while mean.ndim < data.ndim:
             mean = mean[np.newaxis, ...]
@@ -564,35 +581,53 @@ class MtsDeltaModelBmi(Bmi):
 
         return (data - mean) / (std + self.eps)
 
-    def _get_current_forcing_raw(self) -> NDArray[np.float]:
+    def _get_current_forcing(self) -> NDArray[np.float]:
         """
-        Extracts current BMI forcing variables into a (Vars, 1, Catchments)
-        array.
+        Extracts current step forcing variables into an array.
+
+        Returns
+        -------
+        NDArray
+            Current forcing data. Shape (time, space, vars).
         """
         var_x_list = self.model_config['model']['nn']['hif_model']['forcings']
         hourly_forcing = []
         for var in var_x_list:
-            # Map name, get value, expand dims to (1, Catchments)
             val = self._dynamic_var[map_to_external(var)]['value']  # [time, space]
             hourly_forcing.append(val)
 
         return np.stack(hourly_forcing, axis=-1)  # [time, space, vars]
 
-    def _get_static_tensors(self) -> None:
-        """Helper to get static attributes."""
+    def _get_static_var_tensors(self) -> tuple[torch.Tensor, ...]:
+        """Helper to prepare static variables.
+
+        Returns
+        -------
+        tuple
+            Tensors for:
+            - c_nn_norm: Normalized catchment attributes for NN.
+            - rc_nn_norm: Normalized routing catchment attributes for NN.
+            - outlet_topo: Outlet topology matrix.
+            - areas: Catchment areas.
+            - elev_all: Catchment elevations.
+            - ac_all: Catchment upstream areas.
+        """
         mean_attr = np.asarray(
             self.norm_stats['mean']['static_input'],
-            dtype=np.float32,
+            dtype=self.np_dtype,
         )
-        std_attr = np.asarray(self.norm_stats['std']['static_input'], dtype=np.float32)
+        std_attr = np.asarray(
+            self.norm_stats['std']['static_input'],
+            dtype=self.np_dtype,
+        )
 
         mean_attr_rout = np.asarray(
             self.norm_stats['mean']['rout_static_input'],
-            dtype=np.float32,
+            dtype=self.np_dtype,
         )
         std_attr_rout = np.asarray(
             self.norm_stats['std']['rout_static_input'],
-            dtype=np.float32,
+            dtype=self.np_dtype,
         )
 
         while mean_attr.ndim < 2:
@@ -606,8 +641,7 @@ class MtsDeltaModelBmi(Bmi):
         var_c_list = self.model_config['model']['nn']['hif_model']['attributes']
         var_c_list2 = self.model_config['model']['nn']['hif_model']['attributes2']
 
-        n_units = self._dynamic_var['land_surface_air__temperature']['value'].shape[0]
-        outlet_topo = torch.eye(n_units)
+        outlet_topo = torch.eye(self.n_units)
 
         attr = []
         for var in var_c_list:
@@ -632,14 +666,15 @@ class MtsDeltaModelBmi(Bmi):
         attr_norm = (attr - mean_attr) / (std_attr + self.eps)
         attr_norm_rout = (attr_rout - mean_attr_rout) / (std_attr_rout + self.eps)
 
-        c_nn_norm = torch.from_numpy(attr_norm)
-        rc_nn_norm = torch.from_numpy(attr_norm_rout)
-
-        elev_all = torch.from_numpy(
+        c_nn_norm = self._bmi_tensor(attr_norm)
+        rc_nn_norm = self._bmi_tensor(attr_norm_rout)
+        elev_all = self._bmi_tensor(
             self._static_var[map_to_external('meanelevation')]['value'],
         )
-        ac_all = torch.from_numpy(self._static_var[map_to_external('uparea')]['value'])
-        areas = torch.from_numpy(
+        ac_all = self._bmi_tensor(
+            self._static_var[map_to_external('uparea')]['value'],
+        )
+        areas = self._bmi_tensor(
             self._static_var[map_to_external('catchsize')]['value'],
         )
 
@@ -650,7 +685,7 @@ class MtsDeltaModelBmi(Bmi):
         if areas.ndim < 2:
             areas = areas.unsqueeze(0)
 
-        return c_nn_norm, rc_nn_norm, outlet_topo, areas, elev_all, ac_all
+        return (c_nn_norm, rc_nn_norm, outlet_topo, areas, elev_all, ac_all)
 
     # =========================================================================#
 
@@ -705,20 +740,29 @@ class MtsDeltaModelBmi(Bmi):
         except Exception as e:
             raise ValueError(f"Could not parse dtype: {self._dtype}") from e
 
+    def _bmi_array(self, arr: list[float]) -> NDArray[np.float]:
+        """Wrapper for standard array creation."""
+        return np.array(arr, dtype=self.np_dtype)
+
+    def _bmi_tensor(
+        self,
+        arr: list[float] | NDArray[np.float],
+    ) -> torch.Tensor[torch.float]:
+        """Wrapper for standard tensor creation."""
+        return torch.as_tensor(arr, dtype=self.pt_dtype, device=self.device)
+
     def _set_empty_outputs(self) -> None:
         """Set output vars to 0 during warmup phase."""
-        n_units = self._dynamic_var[
-            'atmosphere_water__liquid_equivalent_precipitation_rate'
-        ]['value'].shape[0]
-
         for name in self._output_vars:
             # Assuming output is 1D array of size [Catchments]
-            # Get size from a known variable
-            self._output_vars[name]['value'] = np.zeros(n_units)
+            self._output_vars[name]['value'] = np.zeros(
+                self.n_units,
+                dtype=self.np_dtype,
+            )
 
     def _do_forward(
         self,
-        data_dict: dict[str, Any],
+        data_dict: dict[str, torch.Tensor[torch.float]],
         batched: bool = True,
     ) -> dict[str, NDArray[np.float]]:
         """Forward model on the pre-formatted dictionary.
@@ -755,6 +799,7 @@ class MtsDeltaModelBmi(Bmi):
             model.load_model(epoch=self.model_config['test']['test_epoch'])
             model.dpl_model.eval()
 
+            # Temporary model conditioning to enable cache
             model.dpl_model.nn_model.lstm_mlp2.cache_states = True
             model.dpl_model.phy_model.low_freq_model.cache_states = True
             model.dpl_model.phy_model.high_freq_model.cache_states = True
@@ -762,27 +807,11 @@ class MtsDeltaModelBmi(Bmi):
             model.dpl_model.phy_model.lof_from_cache = True
             model.dpl_model.phy_model.load_from_cache = True
 
+            # Disable routing
             model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e
-
-    # def _load_states(self) -> None:
-    #     """Load saved model states if specified in BMI config."""
-    #     if self._states is None:
-    #         path = os.path.join(
-    #             self.model_config['model_dir'],
-    #             '..',
-    #             self.bmi_config['states_name'],
-    #         )
-    #         self._states = torch.load(os.path.abspath(path))
-    #         try:
-    #             self._model.dpl_model.phy_model.load_states(self._states)
-    #             self._model.dpl_model.phy_model.low_freq_model.load_states(
-    #                 self._states[0],
-    #             )
-    #         except RuntimeError as e:
-    #             raise RuntimeError(f"Failed to load model states: {e}") from e
 
     def _format_outputs(self, outputs: dict[str, NDArray[np.float]]) -> None:
         """Format model outputs as BMI outputs.
@@ -806,16 +835,11 @@ class MtsDeltaModelBmi(Bmi):
                 output_val = output_val.squeeze()
             self._output_vars[name]['value'] = output_val
 
-            # self._output_vars[name]['value'] = np.append(
-            #     self._output_vars[name]['value'],
-            #     output_val,
-            # )
-
     def _load_norm_stats(self) -> None:
         """Load normalization statistics."""
         path = os.path.join(
-            self.model_config["model_dir"],
-            "normalization_statistics.json",
+            self.model_config['model_dir'],
+            'normalization_statistics.json',
         )
         try:
             with open(os.path.abspath(path)) as f:
@@ -854,33 +878,13 @@ class MtsDeltaModelBmi(Bmi):
         dict
             Formatted configuration settings.
         """
-        config['device'], config['dtype'] = self.set_system_spec(config)
+        config['device'] = self.set_system_spec(config)
 
         # Convert date ranges to integer values.
         rho = config['model']['rho']
-        # train_time = Dates(config['train'], rho)
-        # test_time = Dates(config['test'], rho)
+
         sim_time = Dates(config['sim'], rho)
-        # all_time = Dates(config['observations'], rho)
-
-        # exp_time_start = min(
-        #     train_time.start_time,
-        #     train_time.end_time,
-        #     test_time.start_time,
-        #     test_time.end_time,
-        # )
-        # exp_time_end = max(
-        #     train_time.start_time,
-        #     train_time.end_time,
-        #     test_time.start_time,
-        #     test_time.end_time,
-        # )
-
-        # config['train_time'] = [train_time.start_time, train_time.end_time]
-        # config['test_time'] = [test_time.start_time, test_time.end_time]
         config['sim_time'] = [sim_time.start_time, sim_time.end_time]
-        # config['experiment_time'] = [exp_time_start, exp_time_end]
-        # config['all_time'] = [all_time.start_time, all_time.end_time]
 
         if config.get('model_dir') is None:
             config['model_dir'] = ''
@@ -888,17 +892,13 @@ class MtsDeltaModelBmi(Bmi):
         config['sim_dir'] = ''
         config['log_dir'] = ''
 
-        # Convert string back to data type.
-        config['dtype'] = eval(config['dtype'])
-
         for name in ['hif_model', 'lof_model']:
             config['model']['phy'][name]['nearzero'] = float(
                 config['model']['phy'][name]['nearzero'],
             )
-
         return config
 
-    def set_system_spec(self, config: dict) -> tuple[str, str]:
+    def set_system_spec(self, config: dict) -> torch.device:
         """Set the device and data type for the model on user's system.
 
         Parameters
@@ -933,8 +933,7 @@ class MtsDeltaModelBmi(Bmi):
         else:
             raise ValueError(f"Invalid device: {config['device']}")
 
-        dtype = torch.float32
-        return str(device), str(dtype)
+        return device
 
     @staticmethod
     def _set_value_internal(

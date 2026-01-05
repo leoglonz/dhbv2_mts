@@ -1,16 +1,10 @@
 import numpy as np
 from numpy.typing import NDArray
-import torch
-
-
-def bmi_array(arr: list[float]) -> NDArray:
-    """Wrapper to ensure standardized numpy arrays in BMI."""
-    return np.array(arr, dtype='float32')
 
 
 class RingBuffer:
     """
-    Fixed-size circular buffer for pytorch tensors.
+    Fixed-size circular buffer.
 
     Handles rolling windows without memory reallocation and fragmentation.
 
@@ -20,25 +14,21 @@ class RingBuffer:
         Tuple defining the shape of the buffer, e.g., (timesteps, space, vars).
     dtype
         Data type of the buffer elements.
-    device
-        Device where the buffer is stored (e.g., 'cpu' or 'cuda').
     """
 
     def __init__(
         self,
         shape: tuple,
-        dtype: torch.dtype = torch.float64,
-        device: str = 'cpu',
+        dtype: np.dtype = np.float64,
     ) -> None:
         self.dtype = dtype
-        self.device = device
 
-        self.buffer = torch.zeros(shape, dtype=dtype, device=device)
+        self.buffer = np.zeros(shape, dtype=dtype)
         self.capacity = shape[0]
         self.ptr = 0
         self.is_full = False
 
-    def append(self, item: torch.Tensor) -> None:
+    def append(self, item: NDArray[np.float]) -> None:
         """Overwrite the oldest item with new data.
 
         Parameters
@@ -46,17 +36,20 @@ class RingBuffer:
         item
             New data to append to the buffer. Expected shape: (space, vars).
         """
+        if not isinstance(item, np.ndarray):
+            item = np.array(item, dtype=self.dtype)
+
         self.buffer[self.ptr] = item
         self.ptr = (self.ptr + 1) % self.capacity
         if self.ptr == 0:
             self.is_full = True
 
-    def get_ordered(self) -> torch.Tensor:
+    def get_ordered(self) -> NDArray[np.float]:
         """Return buffer.
 
         Returns
         -------
-        torch.Tensor
+        np.ndarray
             Buffer contents ordered from oldest to newest.
         """
         if not self.is_full:
@@ -64,14 +57,14 @@ class RingBuffer:
             return self.buffer[: self.ptr]
 
         # Roll so the oldest data (currently at ptr) moves to index 0
-        return torch.roll(self.buffer, shifts=-self.ptr, dims=0)
+        return np.roll(self.buffer, shift=-self.ptr, axis=0)
 
-    def get_last(self) -> torch.Tensor:
+    def get_last(self) -> NDArray[np.float]:
         """Get the most recently added item.
 
         Returns
         -------
-        torch.Tensor
+        NDArray[np.float]
             The last item added to the buffer. Shape (1, space, vars).
         """
         if self.ptr == 0 and not self.is_full:
