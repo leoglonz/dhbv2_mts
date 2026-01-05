@@ -35,7 +35,7 @@ lengthkm: 2.147179500288239
 
 # BMI configuration
 model_dir: ./data/dhbv2_mts/model/dhbv_2_mts/
-dtype: float64
+dtype: float32
 
 verbose: false
 

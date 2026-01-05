@@ -501,7 +501,7 @@ class MtsDeltaModelBmi(Bmi):
             # Daily: Just take the full available daily history (up to 351)
             # **Since daily buffer only updates every 24h, it naturally lags
             # correctly behind the current hourly window.
-            raw_daily = self._daily_buffer.get_ordered()
+            raw_daily = self._daily_buffer.get_ordered()[: -self.b_offset]
 
         else:
             # CASE 2: SINGLE STEP INFERENCE
