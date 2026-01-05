@@ -20,6 +20,8 @@ from numpy.typing import NDArray
 
 from dhbv2.log import log
 from dhbv2.utils import bmi_array
+from dhbv2.log import configure_logging
+from dhbv2.utils import RingBuffer
 
 root_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -146,9 +148,16 @@ class MtsDeltaModelBmi(Bmi):
     hourly-scale HBV and utilizes rolling window input caching for 358-day*
     lagged hourly runoff simulation.
 
+    Parameters
+    ----------
+    verbose
+        Enables debug print statements if True.
+
     Source Code
+    -----------
     -> https://github.com/mhpi/hydrodl2 for core HBV models.
     -> https://github.com/mhpi/dmg for differentiable model framework.
+    -> https://github.com/csdms/bmi-python for BMI interface.
 
     ---
 
@@ -166,55 +175,44 @@ class MtsDeltaModelBmi(Bmi):
         date.
     """
 
-    _att_map = {
-        'model_name': 'δHBV2.0 MTS',
-        'version': '0.1',
-        'author_name': 'Leo Lonzarich',
-        'time_step_size': 3600,
-        'time_units': 's',
-    }
-
     def __init__(self, verbose: bool = False) -> None:
-        """Create a BMI ready for initialization.
-
-        Parameters
-        ----------
-        verbose
-            Enables debug print statements if True.
-        """
         super().__init__()
-        if verbose:
-            t_start = time.time()
-        self.proc_time = 0.0
-        self._name = self._att_map['model_name']
-        self._time_units = self._att_map['time_units']
-        self._time_step_size = self._att_map['time_step_size']
+        self._name = 'δHBV2.0 MTS'
+        self._version = '1.0'
+        self._author_name = 'Leo Lonzarich'
+
         self.verbose = verbose
 
-        # BMI state variables
+        # --- BMI state variables ---
         self._model = None
         self._states = None
         self._initialized = False
         self._is_warm = False
+
+        self._dtype = 'float64'
+
+        self._time_units = 's'
+        self._time_step_size = 3600
         self._timestep = 0
         self._start_time = 0.0
         self._end_time = np.finfo('d').max
+        self._proc_time = 0.0
         self._var_loc = 'node'
         self._var_grid_id = 0
         self.eps = 1e-6
 
-        # Caching and warmup
+        # --- Caching and warmup ---
         self.req_daily_history = 351  # 351d of daily data
         self.req_hourly_history = 168  # 7d/168hr of hourly data
         self.warmup_frequency = 168  # How often to run warmup (every 7d/168hr)
         self._steps_since_warmup = 0
 
-        # Cache buffers
+        # --- Cache buffers ---
         self._hourly_buffer = []  # Sliding window of 168hr
         self._daily_buffer = []  # Sliding window of 351d
-        self._current_day_accumulator = []  # Buffer for a single day of 24hr
+        self._day_accumulator = []  # Buffer for a single day of 24hr
 
-        # Input/output vars
+        # --- Model variables ---
         self._dynamic_var = self._set_value_internal(
             _dynamic_input_vars,
             bmi_array([0.0]),
@@ -225,17 +223,14 @@ class MtsDeltaModelBmi(Bmi):
         )
         self._output_vars = self._set_value_internal(_output_vars, bmi_array([0.0]))
 
-        # Other
+        # --- Other ---
         self.norm_stats = None
         self.bmi_config = None
         self.model_config = None
 
-        # Outputs for debugging in ngen
-        # configure_logging('debug')
-
         if self.verbose:
-            self.proc_time = time.time() - t_start
-            log.debug(f"BMI init took {time.time() - t_start} s")
+            # Logging appears in CLI during ngen runtimes.
+            configure_logging('debug')
 
     def initialize(self, config_file: str) -> None:
         """(Control function) Perform startup tasks for the BMI.
@@ -247,18 +242,18 @@ class MtsDeltaModelBmi(Bmi):
         """
         t_start = time.time()
 
-        # (1) Read BMI configuration file
+        # --- Read BMI configuration file ---
         try:
             with open(config_file) as f:
                 self.bmi_config = yaml.safe_load(f)
         except Exception as e:
-            raise RuntimeError(f"Failed to load BMI configuration: {e}") from e
+            raise RuntimeError(f"Failed loading BMI configuration: {e}") from e
 
-        # (2) Read model configuration file
+        # --- Read model configuration file ---
         try:
-            core_path = self.bmi_config.get('model_path')
+            core_path = self.bmi_config.get('model_dir')
             if os.path.exists(core_path):
-                # Path in ngen
+                # Path inside ngen
                 model_dir = core_path
             else:
                 # Path for local testing
@@ -267,21 +262,21 @@ class MtsDeltaModelBmi(Bmi):
                     '..',
                     '..',
                     'ngen_resources/',
-                    self.bmi_config.get('model_path'),
+                    core_path,
                 )
             model_config_path = os.path.join(model_dir, 'config.yaml')
             with open(model_config_path) as f:
                 self.model_config = yaml.safe_load(f)
         except Exception as e:
-            raise RuntimeError(f"Failed to load model configuration: {e}") from e
+            raise RuntimeError(f"Failed loading model configuration: {e}") from e
 
         self.model_config = self.initialize_config(self.model_config)
         self.model_config['model_dir'] = model_dir
 
-        # Load normalization statistics
+        # --- Load model input statistics for normalization ---
         self._load_norm_stats()
 
-        # Load static input vars from BMI config
+        # --- Load static input variables ---
         for name in self._static_var.keys():
             ext_name = map_to_internal(name)
             if ext_name in self.bmi_config.keys():
@@ -289,29 +284,49 @@ class MtsDeltaModelBmi(Bmi):
             else:
                 log.warning(f"Static variable '{name}' not in BMI config. Skipping.")
 
-        # Update internal parameters
+        # --- Update internal parameters ---
         self._time_step_size = self.bmi_config.get(
             'time_step_size',
             self._time_step_size,
         )
-        self.current_time = self.bmi_config.get('start_time', self._start_time)
-        self._end_time = self.bmi_config.get('end_time', self._end_time)
+        self._dtype = self.bmi_config.get('dtype', self._dtype)
+        self._set_dtype()
 
-        # Daily buffer extra size so that daily and hourly buffers don't overlap.
-        self.dbuff = self.req_hourly_history // 24
-
-        # Load model
+        # --- Load model ---
         self.device = self.model_config['device']
-        self.external_dtype = eval(self.bmi_config['dtype'])
-        self.internal_dtype = eval(self.bmi_config['dtype'])
         self._model = self._load_model().to(self.device)
         # self._load_states()
 
+        # --- Buffer initialization ---
+        n_vars = self.get_input_item_count()
+
+        # Offset so daily and hourly buffers don't overlap.
+        self.b_offset = self.req_hourly_history // 24
+
+        self._hourly_buffer = RingBuffer(
+            (self.req_hourly_history, 1, n_vars),
+            dtype=self.pt_dtype,
+            device=self.device,
+        )
+        self._daily_buffer = RingBuffer(
+            (self.req_daily_history + self.b_offset, 1, n_vars),
+            dtype=self.pt_dtype,
+            device=self.device,
+        )
+        self._day_accumulator = np.zeros(
+            (24, 1, n_vars),
+            dtype=self.pt_dtype,
+            device=self.device,
+        )
+        self._day_accumulator_ptr = 0
+
         self._initialized = True
+
         if self.verbose:
-            self.proc_time += time.time() - t_start
+            self._proc_time += time.time() - t_start
             log.info(
-                f"BMI Initialize took {time.time() - t_start:.4f} s | Total runtime: {self.proc_time:.4f} s",
+                f"BMI Initialize took {time.time() - t_start:.4f} s | ",
+                f"Total runtime: {self._proc_time:.4f} s",
             )
 
     def update(self) -> None:
@@ -322,8 +337,8 @@ class MtsDeltaModelBmi(Bmi):
         t_start = time.time()
 
         # 1. Cache raw data (no normalization) to allow daily aggregation.
-        raw_forcing_t = self._get_current_forcing_raw()
-        self._update_caches(raw_forcing_t)
+        forcing = self._get_current_forcing_raw()
+        self._update_caches(forcing)
 
         # 2. Check if we have enough history to run a prediction.
         #    (We need at least 351 days + 168 hours of data to do first warmup).
@@ -369,7 +384,7 @@ class MtsDeltaModelBmi(Bmi):
 
         # Track BMI runtime
         if self.verbose:
-            self.proc_time += time.time() - t_start
+            self._proc_time += time.time() - t_start
 
     def update_until(self, time: float) -> None:
         """(Control function) Advance BMI state until the given time.
@@ -401,10 +416,10 @@ class MtsDeltaModelBmi(Bmi):
             self.update()
 
         # Track BMI runtime
-        self.proc_time += time.time() - t_start
+        self._proc_time += time.time() - t_start
         if self.verbose:
             log.info(
-                f"BMI Update Until took {time.time() - t_start:.4f} s | Total runtime: {self.proc_time:.4f} s",
+                f"BMI Update Until took {time.time() - t_start:.4f} s | Total runtime: {self._proc_time:.4f} s",
             )
 
     def finalize(self) -> None:
@@ -421,80 +436,70 @@ class MtsDeltaModelBmi(Bmi):
     # Caching Logic
     # =========================================================================#
 
-    def _update_caches(self, raw_forcing: NDArray[np.float]) -> None:
+    def _update_caches(self, forcing: NDArray[np.float]) -> None:
         """Manages the rolling windows.
 
-        raw_forcing shape: (time=1, space nvars)
+        Parameters
+        ----------
+        raw_forcing
+            Current forcing data. Shape (1, space, vars).
         """
-        # 1. Add to hourly buffer
-        self._hourly_buffer.append(raw_forcing)
+        # (1) Add to hourly buffer
+        # Keep exactly 7d/168hr warmup + current hour
+        self._hourly_buffer.append(forcing[0])
 
-        # Maintain hourly buffer size
-        # keep exactly what's needed for the 7d/168hr warmup + current
-        if len(self._hourly_buffer) - 1 > self.req_hourly_history:
-            self._hourly_buffer.pop(0)
+        # (2) Add to day accumulator
+        self._day_accumulator[self._day_accumulator_ptr] = forcing[0]
+        self._day_accumulator_ptr += 1
 
-        # 2. Add to day accumulator
-        self._current_day_accumulator.append(raw_forcing)
+        # (3) Check if 24 hours have passed to create a daily entry
+        if self._day_accumulator_ptr == 24:
+            # Aggregate: take mean/sum across time dimension
+            prcp = self._day_accumulator[:, :, 0].sum(axis=0)
+            temp = self._day_accumulator[:, :, 1].mean(axis=0)
+            pet = self._day_accumulator[:, :, 2].sum(axis=0)
 
-        # 3. Check if 24 hours have passed to create a daily entry
-        if len(self._current_day_accumulator) == 24:
-            # Aggregate: take mean across time dimension
-            day_stack = np.concatenate(self._current_day_accumulator, axis=0)
+            daily_agg = np.stack([prcp, temp, pet], axis=-1)
 
-            prcp = day_stack[:, :, 0].sum(axis=0)
-            temp = day_stack[:, :, 1].mean(axis=0)
-            pet = day_stack[:, :, 2].sum(axis=0)
-
-            daily_agg = np.expand_dims(np.stack([prcp, temp, pet], axis=-1), axis=1)
-
+            # Add to daily buffer
             self._daily_buffer.append(daily_agg)
-            self._current_day_accumulator = []  # Reset accumulator
-
-            if not self._is_warm:
-                # Maintain daily buffer size (keep 351 warmup + 1 current day)
-                if len(self._daily_buffer) - 1 > self.req_daily_history + self.dbuff:
-                    self._daily_buffer.pop(0)
-            else:
-                # Maintain daily buffer size during warm operation
-                if len(self._daily_buffer) > self.req_daily_history + self.dbuff:
-                    self._daily_buffer.pop(0)
+            self._day_accumulator_ptr = 0
 
     def _prepare_input_dict(self, mode: str = 'step') -> dict[str, NDArray[np.float]]:
         """
         Constructs inputs for either history/cache warmup or single-step
-        inference.
+        inference and normalizes data on-the-fly.
 
-        Normalizes data on the fly.
+        Parameters
+        ----------
+        mode
+            'warmup' to prepare batch warmup data, 'step' for single-step
+            inference.
+
+        Returns
+        -------
+        dict
+            Dictionary of input tensors for the model.
         """
-        # 1. Retrieve data from buffers
-        raw_hourly_list = self._hourly_buffer  # Last 7 days of hourly
-        raw_daily_list = self._daily_buffer  # Last 351 days of daily
-
+        # (1) Retrieve data from buffers
         if mode == 'warmup':
             # CASE 1: BATCH WARMUP
-            # We want history UP TO the current step, but NOT including it.
-            # Slice: [-169 : -1] -> The 168 hours prior to current
-            raw_hourly = np.concatenate(raw_hourly_list[0:-1], axis=0)
+            # Hourly: We want history UP TO the current step, but NOT including it.
+            raw_hourly = self.hourly_history.get_ordered()
 
             # Daily: Just take the full available daily history (up to 351)
             # **Since daily buffer only updates every 24h, it naturally lags
-            # correctly behind the current hourly-only window.
-            raw_daily = np.concatenate(raw_daily_list[0 : -self.dbuff], axis=0)
+            # correctly behind the current hourly window.
+            raw_daily = self.daily_history.get_ordered()
 
         else:
             # CASE 2: SINGLE STEP INFERENCE
-            # We want ONLY the current timestep.
-            # Slice: [-1] -> The very last entry we just added.
-            raw_hourly = np.concatenate(raw_hourly_list[-1:], axis=0)
+            # Hourly: We want ONLY the current timestep (very last entry).
+            raw_hourly = self.hourly_history.get_last()
 
-            # For daily input during a single hourly step, we usually repeat
+            # Daily: For daily input during a single hourly step, we repeat
             # the last known daily value or use zeros if architecture implies.
-            # Assuming the model handles the daily/hourly mismatch via the daily input tensor:
-            if len(raw_daily_list) > 0:
-                raw_daily = np.concatenate(raw_daily_list[-1:], axis=0)
-            else:
-                raw_daily = np.zeros_like(raw_hourly)
+            raw_daily = self.daily_history.get_last()
 
         # 2. Normalize
         x_norm_hourly = self._normalize(raw_hourly, 'dyn_input')
@@ -681,7 +686,7 @@ class MtsDeltaModelBmi(Bmi):
         - 351 days of daily history
         - 168 hours of hourly history
         """
-        daily_ready = len(self._daily_buffer) >= self.req_daily_history + self.dbuff
+        daily_ready = len(self._daily_buffer) >= self.req_daily_history + self.b_offset
         hourly_ready = len(self._hourly_buffer) >= self.req_hourly_history
 
         return daily_ready and hourly_ready
@@ -691,6 +696,14 @@ class MtsDeltaModelBmi(Bmi):
     # Helper Functions
 
     # =========================================================================#
+
+    def _set_dtype(self) -> None:
+        """Set the numpy and pytorch dtype for all model variables."""
+        try:
+            self.pt_dtype = eval(f"torch.{self._dtype}")
+            self.np_dtype = eval(f"np.{self._dtype}")
+        except Exception as e:
+            raise ValueError(f"Could not parse dtype: {self._dtype}") from e
 
     def _set_empty_outputs(self) -> None:
         """Set output vars to 0 during warmup phase."""
@@ -1017,7 +1030,7 @@ class MtsDeltaModelBmi(Bmi):
 
     def get_time_units(self) -> str:
         """Time units of the model."""
-        return self._att_map['time_units']
+        return self._time_units
 
     def get_time_step(self) -> float:
         """Return the current time step of the model."""
@@ -1091,22 +1104,25 @@ class MtsDeltaModelBmi(Bmi):
                 break
 
     def get_grid_rank(self, grid):
-        """Get number of dimensions of the computational grid."""
+        """Get number of dimensions of the computational grid.
+
+        NOTE: grid is always 0 for catchment/node -based models.
+        """
         if grid == 0:
             return 1
-        raise RuntimeError(f"Unsupported grid rank: {grid!s} | Only support 0")
+        raise RuntimeError(f"Unsupported grid rank: {grid!s} | Only grid 0 is allowed.")
 
     def get_grid_size(self, grid):
         """Get the total number of elements in the computational grid."""
         if grid == 0:
             return 1
-        raise RuntimeError(f"Unsupported grid size: {grid!s} | Only support 0")
+        raise RuntimeError(f"Unsupported grid size: {grid!s} | Only grid 0 is allowed.")
 
     def get_grid_type(self, grid):
         """Get the grid type as a string."""
         if grid == 0:
             return 'scalar'
-        raise RuntimeError(f"Unsupported grid type: {grid!s} | Only support 0")
+        raise RuntimeError(f"Unsupported grid type: {grid!s} | Only grid 0 is allowed.")
 
     def get_grid_shape(self, grid, shape):
         """Get dimensions of the computational grid."""
