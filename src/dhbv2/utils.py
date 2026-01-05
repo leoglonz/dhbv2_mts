@@ -28,7 +28,7 @@ class RingBuffer:
         self.ptr = 0
         self.is_full = False
 
-    def append(self, item: NDArray[np.float]) -> None:
+    def append(self, item: NDArray) -> None:
         """Overwrite the oldest item with new data.
 
         Parameters
@@ -44,7 +44,7 @@ class RingBuffer:
         if self.ptr == 0:
             self.is_full = True
 
-    def get_ordered(self) -> NDArray[np.float]:
+    def get_ordered(self) -> NDArray:
         """Return buffer.
 
         Returns
@@ -59,12 +59,12 @@ class RingBuffer:
         # Roll so the oldest data (currently at ptr) moves to index 0
         return np.roll(self.buffer, shift=-self.ptr, axis=0)
 
-    def get_last(self) -> NDArray[np.float]:
+    def get_last(self) -> NDArray:
         """Get the most recently added item.
 
         Returns
         -------
-        NDArray[np.float]
+        NDArray
             The last item added to the buffer. Shape (1, space, vars).
         """
         if self.ptr == 0 and not self.is_full:

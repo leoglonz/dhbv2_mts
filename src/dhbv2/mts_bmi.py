@@ -18,9 +18,7 @@ from dmg import MtsModelHandler
 from dmg.core.utils.dates import Dates
 from numpy.typing import NDArray
 
-from dhbv2.log import log
-from dhbv2.utils import bmi_array
-from dhbv2.log import configure_logging
+from dhbv2.log import configure_logging, log
 from dhbv2.utils import RingBuffer
 
 root_path = os.path.dirname(os.path.abspath(__file__))
@@ -192,6 +190,7 @@ class MtsDeltaModelBmi(Bmi):
         self._is_warm = False
 
         self._dtype = 'float64'
+        self._set_dtype()
         self.device = torch.device('cpu')
 
         self.n_units = 1
@@ -220,13 +219,16 @@ class MtsDeltaModelBmi(Bmi):
         # --- Model variables ---
         self._dynamic_var = self._set_value_internal(
             _dynamic_input_vars,
-            bmi_array([0.0]),
+            self._bmi_array([0.0]),
         )
         self._static_var = self._set_value_internal(
             _static_input_vars,
-            bmi_array([0.0]),
+            self._bmi_array([0.0]),
         )
-        self._output_vars = self._set_value_internal(_output_vars, bmi_array([0.0]))
+        self._output_vars = self._set_value_internal(
+            _output_vars,
+            self._bmi_array([0.0]),
+        )
 
         # --- Other ---
         self.norm_stats = None
@@ -301,7 +303,7 @@ class MtsDeltaModelBmi(Bmi):
         self.device = self.model_config.get('device', self.device)
 
         # --- Load model ---
-        self._model = self._load_model().to(self.device)
+        self._model = self._load_model()
 
         # --- Buffer initialization ---
         n_vars = self.get_input_item_count()
@@ -310,7 +312,7 @@ class MtsDeltaModelBmi(Bmi):
         self.b_offset = self.req_hourly_history // 24
 
         self._hourly_buffer = RingBuffer(
-            (self.req_hourly_history, 1, n_vars),
+            (self.req_hourly_history + 1, 1, n_vars),
             dtype=self.np_dtype,
         )
         self._daily_buffer = RingBuffer(
@@ -440,7 +442,7 @@ class MtsDeltaModelBmi(Bmi):
 
     # =========================================================================#
 
-    def _update_caches(self, forcing: NDArray[np.float]) -> None:
+    def _update_caches(self, forcing: NDArray) -> None:
         """Manages the rolling windows.
 
         Parameters
@@ -472,7 +474,7 @@ class MtsDeltaModelBmi(Bmi):
     def _prepare_input_data(
         self,
         batched: bool = False,
-    ) -> dict[str, torch.Tensor[torch.float]]:
+    ) -> dict[str, torch.Tensor]:
         """
         Constructs inputs for either history/cache warmup or single-step
         inference and normalizes data on-the-fly.
@@ -494,22 +496,21 @@ class MtsDeltaModelBmi(Bmi):
         if batched:
             # CASE 1: BATCH WARMUP
             # Hourly: We want history UP TO the current step, but NOT including it.
-            raw_hourly = self.hourly_buffer.get_ordered()
+            raw_hourly = self._hourly_buffer.get_ordered()[:-1]
 
             # Daily: Just take the full available daily history (up to 351)
             # **Since daily buffer only updates every 24h, it naturally lags
             # correctly behind the current hourly window.
-            raw_daily = self.daily_buffer.get_ordered()
+            raw_daily = self._daily_buffer.get_ordered()
 
         else:
             # CASE 2: SINGLE STEP INFERENCE
             # Hourly: We want ONLY the current timestep (very last entry).
-            raw_hourly = self.hourly_buffer.get_last()
+            raw_hourly = self._hourly_buffer.get_last()
 
             # Daily: For daily input during a single hourly step, we repeat
             # the last known daily value or use zeros if architecture implies.
-            raw_daily = self.daily_buffer.get_last()
-
+            raw_daily = self._daily_buffer.get_last()
         # --- Normalize ---
         x_norm_hourly = self._normalize(raw_hourly, 'dyn_input')
         x_norm_daily = self._normalize(raw_daily, 'dyn_input_daily')
@@ -555,7 +556,7 @@ class MtsDeltaModelBmi(Bmi):
             'x_phy_low_freq': x_phy_low_freq if batched else None,
         }
 
-    def _normalize(self, data: NDArray[np.float], name: str) -> NDArray[np.float]:
+    def _normalize(self, data: NDArray, name: str) -> NDArray:
         """Normalize model inputs with saved training data statistics.
 
         Gaussian norm: (X - Mean) / Std.
@@ -581,7 +582,7 @@ class MtsDeltaModelBmi(Bmi):
 
         return (data - mean) / (std + self.eps)
 
-    def _get_current_forcing(self) -> NDArray[np.float]:
+    def _get_current_forcing(self) -> NDArray:
         """
         Extracts current step forcing variables into an array.
 
@@ -740,14 +741,14 @@ class MtsDeltaModelBmi(Bmi):
         except Exception as e:
             raise ValueError(f"Could not parse dtype: {self._dtype}") from e
 
-    def _bmi_array(self, arr: list[float]) -> NDArray[np.float]:
+    def _bmi_array(self, arr: list[float]) -> NDArray:
         """Wrapper for standard array creation."""
         return np.array(arr, dtype=self.np_dtype)
 
     def _bmi_tensor(
         self,
-        arr: list[float] | NDArray[np.float],
-    ) -> torch.Tensor[torch.float]:
+        arr: Union[list[float], NDArray],
+    ) -> torch.Tensor:
         """Wrapper for standard tensor creation."""
         return torch.as_tensor(arr, dtype=self.pt_dtype, device=self.device)
 
@@ -762,9 +763,9 @@ class MtsDeltaModelBmi(Bmi):
 
     def _do_forward(
         self,
-        data_dict: dict[str, torch.Tensor[torch.float]],
+        data_dict: dict[str, torch.Tensor],
         batched: bool = True,
-    ) -> dict[str, NDArray[np.float]]:
+    ) -> dict[str, NDArray]:
         """Forward model on the pre-formatted dictionary.
 
         Parameters
@@ -795,7 +796,11 @@ class MtsDeltaModelBmi(Bmi):
             The loaded δMG model handler.
         """
         try:
-            model = MtsModelHandler(self.model_config, verbose=self.verbose)
+            model = MtsModelHandler(
+                self.model_config,
+                device=self.device,
+                verbose=self.verbose,
+            )
             model.load_model(epoch=self.model_config['test']['test_epoch'])
             model.dpl_model.eval()
 
@@ -809,11 +814,12 @@ class MtsDeltaModelBmi(Bmi):
 
             # Disable routing
             model.dpl_model.phy_model.high_freq_model.use_distr_routing = False
-            return model
+
+            return model.to(dtype=self.pt_dtype, device=self.device)
         except Exception as e:
             raise RuntimeError(f"Failed to load trained model: {e}") from e
 
-    def _format_outputs(self, outputs: dict[str, NDArray[np.float]]) -> None:
+    def _format_outputs(self, outputs: dict[str, NDArray]) -> None:
         """Format model outputs as BMI outputs.
 
         Parameters
@@ -865,7 +871,7 @@ class MtsDeltaModelBmi(Bmi):
     def initialize_config(
         self,
         config: Union[dict, dict],
-    ) -> dict[str, NDArray[np.float]]:
+    ) -> dict[str, NDArray]:
         """Parse and initialize configuration settings.
 
         Parameters
@@ -938,8 +944,8 @@ class MtsDeltaModelBmi(Bmi):
     @staticmethod
     def _set_value_internal(
         vars: list[tuple[str, str]],
-        value: NDArray[np.float],
-    ) -> dict[str, dict[str, Union[NDArray[np.float], str]]]:
+        value: NDArray,
+    ) -> dict[str, dict[str, Union[NDArray, str]]]:
         """Set the values of given variables.
 
         Returns
@@ -1035,13 +1041,13 @@ class MtsDeltaModelBmi(Bmi):
         """Return the current time step of the model."""
         return self._time_step_size
 
-    def get_value(self, name: str, dest: NDArray[np.float]) -> NDArray[np.float]:
+    def get_value(self, name: str, dest: NDArray) -> NDArray:
         """Get a copy of values of the given variable."""
         tmp = self.get_value_ptr(name).flatten()
         dest[:] = self._to_external_units(name, tmp.tolist())
         return dest
 
-    def get_value_ptr(self, name: str) -> NDArray[np.float]:
+    def get_value_ptr(self, name: str) -> NDArray:
         """Get a reference to values of the given variable."""
         return {**self._dynamic_var, **self._static_var, **self._output_vars}[name][
             'value'
@@ -1050,9 +1056,9 @@ class MtsDeltaModelBmi(Bmi):
     def get_value_at_indices(
         self,
         name: str,
-        dest: NDArray[np.float],
+        dest: NDArray,
         inds: list[int],
-    ) -> NDArray[np.float]:
+    ) -> NDArray:
         """Get values at indices.
 
         NOTE: ngen retrieves values via this method (twice):
@@ -1069,7 +1075,7 @@ class MtsDeltaModelBmi(Bmi):
 
         return dest
 
-    def set_value(self, name: str, src: NDArray[np.float]) -> None:
+    def set_value(self, name: str, src: NDArray) -> None:
         """Specify a new value for a model variable.
 
         NOTE: ngen uses this for setting dynamic inputs.

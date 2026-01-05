@@ -32,7 +32,7 @@ FORCING_PATH = (
     './ngen_resources/data/forcing/camels_2008-01-09_00_00_00_2010-12-30 23_00_00.nc'
 )
 SAVE_OUTPUT = True
-SAVE_PATH = f'./output/dhbv2_mts_hourly_{CAT_ID}_runoff.npy'
+SAVE_PATH = f'./output/dhbv2_mts_{CAT_ID}_runoff.npy'
 ### ----------------------------------------- ###
 
 
@@ -49,7 +49,7 @@ model = Bmi(verbose=False)
 
 ### BMI initialization ###
 log.info("Initializing BMI")
-model.initialize(config_path=bmi_config_path)
+model.initialize(config_file=bmi_config_path)
 
 
 log.info(f"Preparing data for catchment ID: {CAT_ID}")
@@ -58,8 +58,8 @@ forcings = ds.sel(ids=CAT_ID)
 t_steps = len(forcings['time'])
 
 # Maintain strict typing of forcing arrays
-precip = forcings['precip_rate[mm h-1]'].values.astype(np.float64)
-temp = forcings['TMP_2maboveground[degC]'].values.astype(np.float64)
+precip = forcings['precip_rate'].values.astype(np.float64)
+temp = forcings['TMP_2maboveground'].values.astype(np.float64)
 pet = forcings['PET_hargreaves'].values.astype(np.float64)
 
 

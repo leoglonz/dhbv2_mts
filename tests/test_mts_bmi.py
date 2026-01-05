@@ -14,8 +14,8 @@ pkg_root = Path(__file__).parent
 
 ### -------- Settings -------- ###
 # Numpy file with dhbv2 runoff data
-SIM_PATH = f"{pkg_root}/output/dhbv2_mts_hourly_cat-2453_runoff.npy"
-VAL_PATH = f"{pkg_root}/dhbv2_mts_hourly_cat-2453_runoff_benchmark.npy"
+SIM_PATH = f"{pkg_root}/output/dhbv2_mts_cat-2453_runoff.npy"
+VAL_PATH = f"{pkg_root}/dhbv2_mts_cat-2453_runoff_benchmark.npy"
 ### -------------------------- ###
 
 
