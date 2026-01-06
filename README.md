@@ -117,6 +117,8 @@ Use `dhbv2.mts_bmi.MtsDeltaModelBmi.`
 
 See [docs](https://github.com/mhpi/dhbv2/tree/master/docs) for installation and runtime instructions.
 
+</br>
+
 ## Publications
 
 1. Song, Y., Bindas, T., Shen, C., Ji, H., Knoben, W. J. M., Lonzarich, L., Clark, M. P., et al. "High-resolution national-scale water modeling is enhanced by multiscale differentiable physics-informed machine learning." Water Resources Research (2025). <https://doi.org/10.1029/2024WR038928>
