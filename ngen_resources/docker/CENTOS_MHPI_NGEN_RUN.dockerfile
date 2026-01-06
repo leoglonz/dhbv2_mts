@@ -1,7 +1,7 @@
 # Build ngen on CentOS/Rocky Linux 8 with MHPI dependencies and Python3.9
 ARG NPROC=4
 ARG NGEN_REPO=https://github.com/mhpi/ngen.git
-ARG NGEN_BRANCH=mdframe_fix
+ARG NGEN_BRANCH=master
 
 
 # Stage 1: Get ngen source and initialize submodules
