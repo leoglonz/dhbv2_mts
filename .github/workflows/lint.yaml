@@ -24,6 +24,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
+      - name: Install dependencies
+        run: uv sync --extra dev
+
       - name: Run Ruff check
         run: uv run ruff check . --config pyproject.toml --output-format=github
 
