@@ -1,71 +1,79 @@
-import logging
-
 import numpy as np
 from numpy.typing import NDArray
 
-log = logging.getLogger('dhbv2')
 
+class RingBuffer:
+    """
+    Fixed-size circular buffer.
 
-def bmi_array(arr: list[float]) -> NDArray:
-    """Wrapper ensure the expected numpy array datatype is used."""
-    return np.array(arr, dtype='float32')
+    Handles rolling windows without memory reallocation and fragmentation.
 
+    Parameters
+    ----------
+    shape
+        Tuple defining the shape of the buffer, e.g., (timesteps, space, vars).
+    dtype
+        Data type of the buffer elements.
+    """
 
-# def _check_license_agreement():
-#     """Checks if user has agreed to package license and prompts if not."""
-#     package_name = 'dhbv2'
+    def __init__(
+        self,
+        shape: tuple,
+        dtype: np.dtype = np.float64,
+    ) -> None:
+        self.dtype = dtype
 
-#     config_dir = Path(user_config_dir(package_name))
-#     agreement_file = config_dir / '.license_status'
+        self.buffer = np.zeros(shape, dtype=dtype)
+        self.capacity = shape[0]
+        self.ptr = 0
+        self.is_full = False
 
-#     if not agreement_file.exists():
-#         print(f"\n[----- {package_name} LICENSE AGREEMENT -----]")
+    def append(self, item: NDArray) -> None:
+        """Overwrite the oldest item with new data.
 
-#         try:
-#             # Find and read LICENSE file
-#             license_path = files(package_name).parent.parent.joinpath("LICENSE")
-#             license = license_path.read_text(encoding="utf-8")
-#             print(license)
-#         except FileNotFoundError:
-#             # Fallback in case the LICENSE file wasn't packaged correctly
-#             print(
-#                 "\n|> Error locating License. Showing summary <|\n"
-#                 "By using this software, you agree to the terms specified \n"
-#                 "in the Non-Commercial Software License Agreement: \n"
-#                 "\nhttps://github.com/mhpi/dhbv2/blob/master/LICENSE \n"
-#                 "\n'dhbv2' is free for non-commercial use. \n"
-#                 "Prior authorization must be obtained for commercial \n"
-#                 "use. For further details, please contact the Pennsylvania \n"
-#                 "State University Office of Technology Management at \n"
-#                 "814.865.6277 or otminfo@psu.edu.\n",
-#             )
+        Parameters
+        ----------
+        item
+            New data to append to the buffer. Expected shape: (space, vars).
+        """
+        if not isinstance(item, np.ndarray):
+            item = np.array(item, dtype=self.dtype)
 
-#         print("-" * 40)
+        self.buffer[self.ptr] = item
+        self.ptr = (self.ptr + 1) % self.capacity
+        if self.ptr == 0:
+            self.is_full = True
 
-#         response = input("Do you agree to these terms? Type 'Yes' to continue: ")
+    def get_ordered(self) -> NDArray:
+        """Return buffer.
 
-#         if response.strip().lower() in ['yes', 'y']:
-#             try:
-#                 config_dir.mkdir(parents=True, exist_ok=True)
-#                 agreement_file.write_text(
-#                     f"accepted_on = {datetime.now().isoformat()}Z\nversion = 1\n",
-#                     encoding="utf-8",
-#                 )
-#                 log.warning(
-#                     f"License accepted. Agreement written to {agreement_file}\n",
-#                 )
-#             except OSError as e:
-#                 log.warning(f"Failed to save agreement file {agreement_file}: {e}")
-#                 print(
-#                     "You may need to run with administrator privileges to avoid "
-#                     "repeating this process at runtime.",
-#                 )
-#         else:
-#             print("\n>| License agreement not accepted. Exiting. <|")
-#             raise SystemExit(1)
+        Returns
+        -------
+        np.ndarray
+            Buffer contents ordered from oldest to newest.
+        """
+        if not self.is_full:
+            # Return data up to current ptr
+            return self.buffer[: self.ptr]
 
+        # Roll so the oldest data (currently at ptr) moves to index 0
+        return np.roll(self.buffer, shift=-self.ptr, axis=0)
 
-# # This only runs once when package is first imported.
-# if not os.environ.get('CI'):
-#     # Skip license check in CI envs (e.g., GitHub Actions)
-#     _check_license_agreement()
+    def get_last(self) -> NDArray:
+        """Get the most recently added item.
+
+        Returns
+        -------
+        NDArray
+            The last item added to the buffer. Shape (1, space, vars).
+        """
+        if self.ptr == 0 and not self.is_full:
+            # Return empty if no items have been added
+            return np.zeros((1, *self.buffer.shape[1:]), dtype=self.buffer.dtype)
+
+        # The last item added is at ptr - 1
+        idx = (self.ptr - 1) % self.capacity
+        return self.buffer[idx : idx + 1]
+
+    def __len__(self):
+        return self.capacity if self.is_full else self.ptr
