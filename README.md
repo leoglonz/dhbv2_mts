@@ -87,7 +87,6 @@ Use `dhbv2.bmi.DeltaModelBmi`.
             "model_type_name": "Differentiable Model",
             "config_model": "config.yaml",
             "init_config": "/path/to/bmi_config.yaml",
-            "allow_exceed_end_time": true
         }
     }
 }
@@ -116,33 +115,7 @@ Use `dhbv2.mts_bmi.MtsDeltaModelBmi.`
 
 ## Operational Deployment
 
-### Pip Installation
-
-If your NextGen environment supports installing external python packages:
-
-```bash
-pip install .
-# Or directly from git
-pip install git+[https://github.com/mhpi/dhbv2.git](https://github.com/mhpi/dhbv2.git)
-```
-
-### Manual Placement (Standard NextGen Workflow)
-
-1. Environment: Ensure you are running NextGen in a Box or a compiled NextGen prototype.
-
-2. Clone:
-
-    ```bash
-    git clone [https://github.com/mhpi/dhbv2.git](https://github.com/mhpi/dhbv2.git)
-    ```
-
-3. Deploy: Move the dhbv2 directory to NextGen's extern/ folder (or ensure it is in the PYTHONPATH).
-
-4. Data: Download demo AORC forcings and Hydrofabric 2.2 attributes from AWS.
-
-5. Run: Execute the NextGen engine referencing your configuration files.
-
-</br>
+See [docs](https://github.com/mhpi/dhbv2/tree/master/docs) for installation and runtime instructions.
 
 ## Publications
 
