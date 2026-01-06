@@ -15,7 +15,7 @@ import torch
 import yaml
 from bmipy import Bmi
 from dmg import MtsModelHandler
-from dmg.core.utils.dates import Dates
+from dmg.core import Dates
 from numpy.typing import NDArray
 
 from dhbv2.log import configure_logging, log
@@ -511,6 +511,7 @@ class MtsDeltaModelBmi(Bmi):
             # Daily: For daily input during a single hourly step, we repeat
             # the last known daily value or use zeros if architecture implies.
             raw_daily = self._daily_buffer.get_last()
+
         # --- Normalize ---
         x_norm_hourly = self._normalize(raw_hourly, 'dyn_input')
         x_norm_daily = self._normalize(raw_daily, 'dyn_input_daily')
@@ -573,8 +574,8 @@ class MtsDeltaModelBmi(Bmi):
         NDArray
             Normalized data. Shape (time, space, vars).
         """
-        mean = np.asarray(self.norm_stats['mean'][name], dtype=self.np_dtype)
-        std = np.asarray(self.norm_stats['std'][name], dtype=self.np_dtype)
+        mean = np.asarray(self.norm_stats['mean'][name])  # , dtype=self.np_dtype)
+        std = np.asarray(self.norm_stats['std'][name])  # , dtype=self.np_dtype)
 
         while mean.ndim < data.ndim:
             mean = mean[np.newaxis, ...]
