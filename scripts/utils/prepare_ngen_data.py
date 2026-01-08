@@ -1,46 +1,40 @@
-"""Building hourly CAMELS forcing dataset.
-3 catchments, 2010-2012.
+"""Building hourly forcing dataset for CAMELS catchments.
+Creates NETCDF and CSV files suitable for ngen forcing input.
 
-Mirrors structure of ./ngen/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 23_00_00.csv
-
-@leoglonz
+Mirrors structure of ngen forcing files:
+- ./ngen/data/forcing/cats-27_52_67-2015_12_01-2015_12_30.nc
+- ./ngen/data/forcing/cat-67_2015-12-01 00_00_00_2015-12-30 23_00_00.csv
 """
 
 import os
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import xarray as xr
 
 # Setup pathing
 pkg_root = Path(__file__).parent.parent.parent
 
 
-n_cat = 3
-t_start = '2008-01-09 00:00:00'
-t_end = '2010-12-30 23:00:00'
+### -------- Settings -------- ###
+CAT_IDS = [2453, 2454, 2455]
+T_START = '2008-01-09 00:00:00'  # 2004-10-01 00:00:00
+T_END = '2015-12-30 23:00:00'  # 2018-09-30 23:00:00
 
-data_path = '/gpfs/yxs275/data/hourly/CAMELS_HF/forcing/forcing_1990_2018_gauges_hourly_00000_00499.nc'
-out_path = os.path.join(
-    pkg_root,
-    f"ngen_resources/data/forcing/camels_{t_start.replace(':', '_').replace(' ', '_')}_{t_end.replace(':', '_').replace(' ', '_')}.nc",
-)
+DATA_PATH = '/gpfs/yxs275/data/hourly/CAMELS_HF/forcing/forcing_1990_2018_gauges_hourly_00000_00499.nc'
+OUT_DIR = os.path.join(pkg_root, "ngen_resources/data/forcing/")
 
-camels_xr = xr.open_dataset(data_path)
-
-out_df = pd.DataFrame()
+SAVE_CSV = True
+### -------------------------- ###
 
 
-def transform_dataset(ds_in):
+def transform_dataset(ds_in, cat_ids):
     """Transform CAMELS dataset to match target structure."""
-    # 1. Rename dims
-    ds = ds_in.rename({'gauge': 'catchment-id'})
+    ds = ds_in.sel(gauge=cat_ids)
+    ds = ds.rename({'gauge': 'catchment-id'})
+    ds = ds.sel(time=slice(T_START, T_END))
 
-    ds = ds.isel({'catchment-id': slice(0, n_cat)})
-    ds = ds.sel(time=slice(t_start, t_end))
-
-    # 2. Rename existing vars
+    # Rename existing vars
     ds = ds.rename(
         {
             'P': 'precip_rate[mm h-1]',
@@ -52,26 +46,18 @@ def transform_dataset(ds_in):
     for var in ds.variables:
         ds[var].encoding = {}
 
-    # 3. Create 'ids' var
+    # Create 'ids' var
     raw_ids = ds['catchment-id'].values.astype(str)
-
-    # Prepend "cat-" like ["cat-2453", "cat-2454", ...]
     cat_ids = np.char.add('cat-', raw_ids)
-
     ds['ids'] = (('catchment-id',), cat_ids)
 
-    # 4. Create 'Time' var with nanosecond units
+    # Create 'Time' var (nanoseconds)
     time_values = ds['time'].values.view('int64').astype('float64')
-
-    time_broadcasted = np.tile(
-        time_values,
-        (ds.sizes['catchment-id'], 1),
-    )
-
+    time_broadcasted = np.tile(time_values, (ds.sizes['catchment-id'], 1))
     ds['Time'] = (('catchment-id', 'time'), time_broadcasted)
     ds['Time'].attrs = {'units': 'ns'}
 
-    # 5. Create zero-filled vars
+    # Create zero-filled vars
     zero_vars = [
         'APCP_surface',
         'DLWRF_surface',
@@ -82,7 +68,6 @@ def transform_dataset(ds_in):
         'VGRD_10maboveground',
     ]
 
-    # Create zeros based on the new subset shape
     shape = (ds.sizes['catchment-id'], ds.sizes['time'])
     zeros = np.zeros(shape, dtype='float64')
 
@@ -94,9 +79,11 @@ def transform_dataset(ds_in):
     ds['TMP_2maboveground'] = ds['TMP_2maboveground'].astype('float64') + np.float64(
         273.15,
     )
-    ds['TMP_2maboveground'].attrs['units'] = 'K'
-    ds['precip_rate[mm h-1]'].attrs['units'] = 'mm hr-1'
-    ds['PET_hargreaves'].attrs['units'] = 'mm hr-1'
+
+    # Standardize units
+    ds['TMP_2maboveground'].attrs['units'] = 'degK'
+    ds['precip_rate[mm h-1]'].attrs['units'] = 'mm h-1'
+    ds['PET_hargreaves'].attrs['units'] = 'mm h-1'
     ds['APCP_surface'].attrs['units'] = 'kg m-2'
     ds['DLWRF_surface'].attrs['units'] = 'W m-2'
     ds['DSWRF_surface'].attrs['units'] = 'W m-2'
@@ -105,25 +92,38 @@ def transform_dataset(ds_in):
     ds['UGRD_10maboveground'].attrs['units'] = 'm s-1'
     ds['VGRD_10maboveground'].attrs['units'] = 'm s-1'
 
-    ds['TMP_2maboveground'].attrs['units'] = 'K'
-    ds['precip_rate'].attrs['units'] = 'mm hr-1'
-    ds['PET_hargreaves'].attrs['units'] = 'mm hr-1'
-
     ds['TMP_2maboveground'].encoding = {'dtype': 'float64'}
-
-    ds = ds.drop_vars(['time', 'catchment-id'])
 
     return ds
 
 
-formatted_ds = transform_dataset(camels_xr)
+def export_to_csv(ds, out_dir):
+    """Exports each catchment in xarray dataset to a separate csv."""
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+        print(f"Created directory: {out_dir}")
 
-# Save to nc
-formatted_ds.to_netcdf(
-    out_path,
-    format='NETCDF4',
-    engine='netcdf4',
-)
+    # time_idx = pd.to_datetime(ds['time'].values)
+
+    for i in range(ds.sizes['catchment-id']):
+        cat_name = ds['ids'].values[i]
+
+        # Select data for this catchment and convert to dataframe
+        df = ds.isel({'catchment-id': i}).to_dataframe()
+
+        if 'ids' in df.columns:
+            df = df.drop(columns=['ids'])
+
+        df = df[['precip_rate[mm h-1]', 'TMP_2maboveground', 'PET_hargreaves']]
+
+        fmt_t_start = T_START.replace(':', '_')
+        fmt_t_end = T_END.replace(':', '_')
+        csv_path = os.path.join(
+            OUT_DIR,
+            f"{cat_name}_{fmt_t_start}_{fmt_t_end}.csv",
+        )
+        df.to_csv(csv_path, index_label='time')
+        print(f"Exported {csv_path}")
 
 
 def verify_integrity(original_path, new_path, t_start, t_end, n_cat):
@@ -158,5 +158,29 @@ def verify_integrity(original_path, new_path, t_start, t_end, n_cat):
     print("SUCCESS: No numerical discrepancies detected.")
 
 
-# Run verification
-# verify_integrity(camels_path, out_path, t_start, t_end, n_cat)
+if __name__ == '__main__':
+    with xr.open_dataset(DATA_PATH) as camels_xr:
+        formatted_ds = transform_dataset(camels_xr, CAT_IDS)
+
+    if SAVE_CSV:
+        export_to_csv(formatted_ds, OUT_DIR)
+
+    final_nc = formatted_ds.drop_vars(['time', 'catchment-id'])
+
+    fmt_t_start = T_START.replace(':', '_')
+    fmt_t_end = T_END.replace(':', '_')
+    nc_path = os.path.join(
+        OUT_DIR,
+        f"camels_{fmt_t_start}_{fmt_t_end}.nc",
+    )
+
+    # Save to nc
+    final_nc.to_netcdf(
+        nc_path,
+        format='NETCDF4',
+        engine='netcdf4',
+    )
+    print(f"Saved NETCDF to: {nc_path}")
+
+    # Run verification
+    # verify_integrity(camels_path, out_path, t_start, t_end, n_cat)

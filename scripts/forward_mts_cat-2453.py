@@ -25,6 +25,7 @@ from dhbv2.mts_bmi import MtsDeltaModelBmi as Bmi
 log = logging.getLogger('BMI_Demo')
 logging.basicConfig(level=logging.INFO)
 
+
 ### Configuration Settings (single-catchment) ###
 CAT_ID = 'cat-2453'  # Options: cat-2453, cat-2454, cat-2455
 BMI_CONFIG_PATH = './ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml'

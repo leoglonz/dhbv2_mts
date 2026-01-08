@@ -15,7 +15,9 @@ git clone git@github.com:NOAA-OWP/ngen.git
 cd ngen
 ```
 
-### 1. Submodule
+> For AWI's NextGen IN A Box (NGIAB), see the ngen fork [CIROH-UA/ngen](https://github.com/CIROH-UA/ngen).
+
+### (1) Submodule
 
 Install dhbv2 as a Git submodule in `./extern` as follows:
 
@@ -32,14 +34,18 @@ git submodule update --init --recursive
 > git submodule update --init --recursive
 > ```
 
-### 2. NextGen
+### (2) NextGen
 
 To build, we recommend using Docker as the [developers suggest](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md). A [Dockerfile](../ngen_resources/docker/) supporting dhbv2 is included with this repo. Copy this Dockerfile to ngen and build:
 
 ```bash
 cp ./dhbv2/ngen_resources/docker/CENTOS_MHPI_NGEN_RUN.dockerfile ./ngen/docker/
 
-docker build . --build-arg NPROC=8 --file ./docker/CENTOS_MHPI_NGEN_RUN.dockerfile --tag localbuild/ngen:latest --network=host
+docker build . \
+    --build-arg NPROC=8 \
+    --file ./docker/CENTOS_MHPI_NGEN_RUN.dockerfile \
+    --tag localbuild/ngen:latest \
+    --network=host
 ```
 
 > For e.g., HPCs, include the additional argument `--network=host` with docker build if you encounter failure due to network connection.
@@ -74,7 +80,7 @@ docker system prune -f
 
 ## Configuration Examples
 
-### 1. Daily Simulation (`realization_cat-88306.json`)
+### (1) Daily Simulation (`realization_cat-88306.json`)
 
 ```json
 {
@@ -100,7 +106,7 @@ docker system prune -f
 }
 ```
 
-### 2. Hourly (MTS) Simulation (`realization_cat-2453.json`)
+### (2) Hourly (MTS) Simulation (`realization_cat-2453.json`)
 
 ```json
 {
@@ -170,7 +176,7 @@ To run all catchments defined in the geopackage/geojson, leave catchment and nex
 
 > Tests supplied by ngen and troute repositories.
 
-### 1. Compile Time
+### (1) Compile Time
 
 To view the compile-time configuration of an pre-compiled NextGen binary use
 the --info flag:
@@ -182,7 +188,7 @@ docker run --rm \
     ./ngen --info
 ```
 
-### 2. NextGen Tests
+### (2) NextGen Tests
 
 To run stock ngen tests (visible with `docker run --rm localbuild/ngen:latest ls /app/test`) within a Docker container, use e.g.,
 
@@ -202,7 +208,7 @@ docker run --rm \
     data/example_bmi_multi_realization_config.json
 ```
 
-### 3. T-Route Tests
+### (3) T-Route Tests
 
 NextGen-integrated troute can be validated as follows:
 

@@ -1,6 +1,6 @@
 # Runtime Validation
 
-This module includes benchmark runoff simulations for daily and hourly δHBV models which can be used as a point of comparision to ensure there are no errors with your runtime or module setup.
+This module includes benchmark runoff simulations for daily and hourly δHBV2.0 models which can be used as a point of comparision to ensure there are no errors with your runtime or module setup.
 
 </br>
 

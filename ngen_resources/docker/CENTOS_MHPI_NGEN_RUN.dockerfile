@@ -1,7 +1,7 @@
 # Build ngen on CentOS/Rocky Linux 8 with MHPI dependencies and Python3.9
 ARG NPROC=4
 ARG NGEN_REPO=https://github.com/mhpi/ngen.git
-ARG NGEN_BRANCH=mdframe_fix
+ARG NGEN_BRANCH=master
 
 
 # Stage 1: Get ngen source and initialize submodules
@@ -64,7 +64,22 @@ RUN curl -L -o boost_1_86_0.tar.bz2 https://sourceforge.net/projects/boost/files
 ENV BOOST_ROOT="/boost_1_86_0"
 
 
-# Stage 3: Build python wheels
+# Stage 3: Download dhbv2 weights
+FROM dependencies AS dhbv2_weights
+
+RUN dnf install -y unzip && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip" && \
+    unzip /tmp/awscliv2.zip -d /tmp && \
+    /tmp/aws/install
+
+RUN aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip /tmp/file.zip --no-sign-request && \
+    unzip -o /tmp/file.zip -d /tmp && \
+    mkdir -p /dhbv2_weights && \
+    cp -r /tmp/dhbv_2_mts/* /dhbv2_weights && \
+    rm -r /tmp
+
+
+# Stage 4: Build python wheels
 FROM dependencies AS python-build
 ARG NPROC
 WORKDIR /build-space
@@ -108,7 +123,7 @@ RUN export NETCDF="/usr/lib64/gfortran/modules" \
     && scl enable gcc-toolset-11 -- ./compiler.sh
 
 
-# Stage 4: Build ngen
+# Stage 5: Build ngen
 FROM dependencies AS build
 ARG NPROC
 
@@ -159,7 +174,7 @@ RUN cmake \
     -j ${NPROC}
 
 
-# --- Stage 5: Runtime (make image ~3x smaller) ---
+# --- Stage 6: Runtime (make image ~3x smaller) ---
 FROM rockylinux:8
 
 # Reinstall full runtime dependencies
@@ -187,6 +202,7 @@ COPY --from=build /ngen/build/extern ./extern
 COPY --from=build /ngen/data /app/data
 COPY --from=build /ngen/build/test ./test
 COPY --from=build /ngen/test/data ./test/data
+COPY --from=dhbv2_weights /dhbv2_weights/. ./data/dhbv2_mts/models/dhbv_2_mts/
 
 # Make sure test-specific libs are indexed
 RUN find /app/extern -name "*.so" -exec dirname {} + | sort -u > /etc/ld.so.conf.d/ngen.conf && \
@@ -200,11 +216,14 @@ ENV UDUNITS2_XML_PATH="/usr/share/udunits/udunits2.xml"
 # Set up python environment
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+ENV CI=true
 
 # Pathing for C++ interpreter
 ENV PYTHONHOME="/usr"
-ENV PYTHONPATH="/app/troute/src/troute-network:/app/troute/src/troute-routing:/app/extern:/opt/venv/lib/python3.9/site-packages:/opt/venv/lib64/python3.9/site-packages"
-
+ENV PYTHONPATH="/app/troute/src/troute-network:/app/troute/src/troute-routing:/app/extern"
 RUN ln -s /opt/venv /app/venv
+
+# Suppress warning from troute + dmod (?)
+ENV PYTHONWARNINGS="ignore:networkx backend defined more than once:RuntimeWarning"
 
 CMD ["./ngen", "data/catchment_data.geojson", "", "data/nexus_data.geojson", "", "data/example_realization_config.json"]
