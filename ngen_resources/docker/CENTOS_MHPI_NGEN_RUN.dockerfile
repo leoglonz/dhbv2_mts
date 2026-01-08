@@ -2,6 +2,8 @@
 ARG NPROC=4
 ARG NGEN_REPO=https://github.com/mhpi/ngen.git
 ARG NGEN_BRANCH=master
+ARG TROUTE_REPO=CIROH-UA/t-route
+ARG TROUTE_BRANCH=ngiab
 
 
 # Stage 1: Get ngen source and initialize submodules
@@ -9,17 +11,22 @@ FROM rockylinux:8 AS source
 ARG NPROC
 ARG NGEN_REPO
 ARG NGEN_BRANCH
+ARG TROUTE_REPO
+ARG TROUTE_BRANCH
 
 RUN yum install -y git \
     # 1. ngen
     && git clone --recursive -b ${NGEN_BRANCH} ${NGEN_REPO} /ngen_src \
     # 2. dmod for multiprocessing
     && git clone -b master https://github.com/NOAA-OWP/DMOD.git /dmod_src \
-    # 3. t-route for routing
-    && git clone --recursive -b master http://github.com/NOAA-OWP/T-Route.git /troute_src
+    # 3. t-route
+    && git clone --depth 1 --single-branch --branch ${TROUTE_BRANCH} https://github.com/${TROUTE_REPO}.git /t-route_src
 
 # Clone and init all submodules
 WORKDIR /ngen_src
+RUN git submodule update --init --recursive --jobs ${NPROC} --depth 1
+
+WORKDIR /t-route_src
 RUN git submodule update --init --recursive --jobs ${NPROC} --depth 1
 
 # NOTE: Patching test to fix swapped x/y values
@@ -82,6 +89,8 @@ RUN aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip /tmp/file
 # Stage 4: Build python wheels
 FROM dependencies AS python-build
 ARG NPROC
+ARG TROUTE_REPO
+ARG TROUTE_BRANCH
 WORKDIR /build-space
 
 RUN yum install -y findutils git
@@ -92,8 +101,7 @@ ENV PATH="/uvbin:${PATH}"
 
 COPY --from=source /ngen_src /ngen_src
 COPY --from=source /dmod_src /dmod_src
-# t-route installs editable dependencies, so any relocations will break pathing.
-COPY --from=source /troute_src /app/troute
+COPY --from=source /t-route_src /app/t-route
 
 # Create python virtual environment
 RUN uv venv /opt/venv
@@ -107,20 +115,34 @@ RUN uv pip install "numpy<2.0.0" pandas scipy bmipy
 RUN find /ngen_src/extern -maxdepth 2 -mindepth 2 -type d \
     -exec uv pip install {} --python-version 3.9 \;
 
-# Install dmod
+# --- Install dmod
 WORKDIR /dmod_src
 RUN uv pip install -r requirements.txt \
     && ./scripts/update_package.sh python/lib/communication \
     && ./scripts/update_package.sh python/lib/modeldata \
     && ./scripts/update_package.sh python/services/subsetservice
 
-# Install t-route
-RUN uv pip install \
-    xarray netcdf4 joblib toolz Cython pyyaml geopandas pyarrow deprecated wheel
-WORKDIR /app/troute
-RUN uv pip install -r requirements.txt
-RUN export NETCDF="/usr/lib64/gfortran/modules" \
-    && scl enable gcc-toolset-11 -- ./compiler.sh
+# --- Install t-route
+WORKDIR /app/t-route
+RUN uv pip install build wheel
+
+# So troute can find netcdf.mod and python3
+ENV FC=gfortran NETCDF=/usr/lib64/gfortran/modules/
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+ADD https://api.github.com/repos/${TROUTE_REPO}/git/refs/heads/${TROUTE_BRANCH} /tmp/version.json
+RUN uv pip install -r https://raw.githubusercontent.com/${TROUTE_REPO}/refs/heads/${TROUTE_BRANCH}/requirements.txt
+
+# disable everything except the kernel builds
+RUN sed -i 's/build_[a-z]*=/#&/' compiler.sh
+RUN ./compiler.sh no-e
+
+RUN uv pip install --config-setting='--build-option=--use-cython' src/troute-network/
+RUN uv build --wheel --config-setting='--build-option=--use-cython' src/troute-network/
+RUN uv pip install --no-build-isolation --config-setting='--build-option=--use-cython' src/troute-routing/
+RUN uv build --wheel --no-build-isolation --config-setting='--build-option=--use-cython' src/troute-routing/
+RUN uv pip install --no-build-isolation src/troute-config/
+RUN uv pip install --no-build-isolation src/troute-nwm/
 
 
 # Stage 5: Build ngen
@@ -158,7 +180,7 @@ RUN cmake \
     -DNGEN_WITH_PYTHON:BOOL=ON \
     -DNGEN_WITH_ROUTING:BOOL=ON \
     -DNGEN_WITH_TESTS:BOOL=ON \
-    -DNGEN_QUIET:BOOL=ON \
+    -DNGEN_QUIET:BOOL=OFF \
     -DUDUNITS_QUIET:BOOL=ON \
     \
     -DNGEN_WITH_EXTERN_SLOTH:BOOL=ON \
@@ -196,7 +218,7 @@ RUN yum update -y \
 
 WORKDIR /app
 COPY --from=python-build /opt/venv /opt/venv
-COPY --from=python-build /app/troute ./troute
+COPY --from=python-build /app/t-route/src/troute-*/dist/*.whl ./t-route
 COPY --from=build /ngen/build/ngen .
 COPY --from=build /ngen/build/extern ./extern
 COPY --from=build /ngen/data /app/data
@@ -220,7 +242,8 @@ ENV CI=true
 
 # Pathing for C++ interpreter
 ENV PYTHONHOME="/usr"
-ENV PYTHONPATH="/app/troute/src/troute-network:/app/troute/src/troute-routing:/app/extern"
+ENV PYTHONPATH="/app/extern:/opt/venv/lib/python3.9/site-packages:/opt/venv/lib64/python3.9/site-packages"
+
 RUN ln -s /opt/venv /app/venv
 
 # Suppress warning from troute + dmod (?)
