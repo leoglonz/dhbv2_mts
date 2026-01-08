@@ -8,34 +8,36 @@ in the CONUS HF.
 
 import xarray as xr
 from ruamel.yaml import YAML
+from pathlib import Path
+
+# Setup pathing
+pkg_root = Path(__file__).parent.parent.parent
 
 
 ### -------- Settings -------- ###
-CAT_ID = 16867
+CAT_ID = 2455
 ATTRS_PATH = '/projects/mhpi/yxs275/hourly_model/mtsHBV/data/CAMELS_HFs_attr_new.nc'
-TARGET_PATH = f'/projects/mhpi/leoglonz/ciroh-ua/dhbv2_mts/ngen_resources/data/dhbv2_mts/config/bmi_cat-{CAT_ID}.yaml'
+TARGET_PATH = f'{pkg_root}/ngen_resources/data/dhbv_2_mts/config/bmi_cat-{CAT_ID}.yaml'
 ### -------------------------- ###
 
 
 if __name__ == '__main__':
     attrs_ds = xr.open_dataset(ATTRS_PATH).sel(gauge=CAT_ID)
 
-    # Initialize the preserved-format loader
     yml = YAML()
     yml.preserve_quotes = True
 
-    # 1. Load data
+    # Load data
     with open(TARGET_PATH) as f:
         config_data = yml.load(f)
 
-    # 2. Update existing keys
+    # Update existing keys
     for var_name in attrs_ds.data_vars:
         key = str(var_name)
         if key in config_data:
-            # Rounding is often nice for config files to avoid 10.55000019
             val = attrs_ds[var_name].item()
             config_data[key] = val
 
-    # 3. Dump back (Comments and structure are preserved automatically)
+    # Dump back (comments and structure are preserved automatically)
     with open(TARGET_PATH, 'w') as f:
         yml.dump(config_data, f)
