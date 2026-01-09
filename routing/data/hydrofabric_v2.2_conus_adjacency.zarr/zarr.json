@@ -1,0 +1,16 @@
+{
+  "attributes": {
+    "format": "COO",
+    "shape": [
+      828289,
+      828289
+    ],
+    "data_types": {
+      "indices_0": "int32",
+      "indices_1": "int32",
+      "values": "uint8"
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

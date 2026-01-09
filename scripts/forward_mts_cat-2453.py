@@ -111,5 +111,5 @@ if SAVE_OUTPUT:
     log.info(f"Saving output to {SAVE_PATH}")
     os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
 
-    # Remove spinup period (first 8592 hours)
+    # Remove warmup period (first 8592 hours)
     np.save(SAVE_PATH, np.array(runoff_sim)[8592:])

@@ -39,11 +39,11 @@ git submodule update --init --recursive
 To build, we recommend using Docker as the [developers suggest](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md). A [Dockerfile](../ngen_resources/docker/) supporting dhbv2 is included with this repo. Copy this Dockerfile to ngen and build:
 
 ```bash
-cp ./dhbv2/ngen_resources/docker/CENTOS_MHPI_NGEN_RUN.dockerfile ./ngen/docker/
+cp ./dhbv2/ngen_resources/docker/ngen_dhbv2.dockerfile ./ngen/docker/
 
 docker build . \
     --build-arg NPROC=8 \
-    --file ./docker/CENTOS_MHPI_NGEN_RUN.dockerfile \
+    --file ./docker/ngen_dhbv2.dockerfile \
     --tag localbuild/ngen:latest \
     --network=host
 ```
@@ -150,26 +150,26 @@ or, with a docker image,
 ```bash
 # With geojson for 1 catchment
 docker run --rm \
-    -v $(pwd)/data:/app/data \
+    -v $(pwd)/data:/ngen/data \
     localbuild/ngen:latest \
     ./ngen \
     /path/to/catchment_data.geojson 'cat-2453' \
     /path/to/nexus_data.geojson 'nex-2454' \
-    ./data/dhbv2_mts/realizations/realization_cat-2453.json
+    ./data/dhbv_2_mts/realizations/realization_cat-2453.json
 
 # With geopackage
 docker run --rm \
-    -v $(pwd)/data:/app/data \
+    -v $(pwd)/data:/ngen/data \
     localbuild/ngen:latest \
     ./ngen \
-    ./data/camels_hf2.gpkg 'cat-2453' \
-    ./data/camels_hf2.gpkg 'nex-2454' \
-    ./data/dhbv2_mts/realizations/realization_cat-2453.json
+    ./data/geo/camels_hf2.gpkg 'cat-2453' \
+    ./data/geo/camels_hf2.gpkg 'nex-2454' \
+    ./data/dhbv_2_mts/realizations/realization_cat-2453.json
 ```
 
 To run all catchments defined in the geopackage/geojson, leave catchment and nexus (e.g., `'cat-2453'` and `'nex-2454'`) defined as `''`.
 
-> Note: If using Docker, make sure `output_root` in your realization begins with `/app/data/`. This will ensure ngen outputs are accessible outside of your Docker container in `./ngen/data/`.
+> Note: If using Docker, make sure `output_root` in your realization begins with `/ngen/data/`. This will ensure ngen outputs are accessible outside of your Docker container in `./ngen/data/`.
 > Note: with default settings, ngen output will save to `./ngen/data/output/`
 
 ## Validation
@@ -183,14 +183,14 @@ the --info flag:
 
 ```bash
 docker run --rm \
-    -v $(pwd)/data:/app/data \
+    -v $(pwd)/data:/ngen/data \
     localbuild/ngen:latest \
     ./ngen --info
 ```
 
 ### (2) NextGen Tests
 
-To run stock ngen tests (visible with `docker run --rm localbuild/ngen:latest ls /app/test`) within a Docker container, use e.g.,
+To run stock ngen tests (visible with `docker run --rm localbuild/ngen:latest ls /ngen/test`) within a Docker container, use e.g.,
 
 ```bash
 docker run --rm localbuild/ngen:latest ./test/test_unit
@@ -200,7 +200,7 @@ Example realizations can also be run with
 
 ```bash
 docker run --rm \
-    -v $(pwd)/data:/app/data \
+    -v $(pwd)/data:/ngen/data \
     localbuild/ngen:latest \
     ./ngen \
     data/catchment_data.geojson '' \
@@ -220,13 +220,13 @@ Troute can be run standalone with the examples it ships with:
 
 ```bash
 docker run --rm \
-  -w /app/troute/test/LowerColorado_TX \
+  -w /ngen/extern/t-route/test/LowerColorado_TX \
   localbuild/ngen:latest \
   python -m nwm_routing -f -V4 test_AnA_V4_NHD.yaml
 
 
 docker run --rm \
-  -w /app/troute/test/LowerColorado_TX_v4 \
+  -w /ngen/troute/test/LowerColorado_TX_v4 \
   localbuild/ngen:latest \
   python -m nwm_routing -f -V4 test_AnA_V4_HYFeature.yaml
 ```

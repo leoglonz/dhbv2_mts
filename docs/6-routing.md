@@ -4,24 +4,20 @@ After runoff simulations have been obtained from δHBV 2.0, there are a few opti
 
 The network can be defined in several ways, with [MERIT-hydro](https://www.reachhydro.org/home/params/merit-basins) and the [NextGen HydroFabric](https://github.com/NOAA-OWP/hydrofabric) being notable examples. In the context of NextGen (ngen), we demonstrate routing on the HydroFabric v2.2 (download [v2.2 source](https://www.lynker-spatial.com) or [AWI-patched v2.2](https://github.com/CIROH-UA/community_hf_patcher/tree/main)) river network with ~4km resolution.
 
-## T-Route
+## T-Route (Coming Soon)
 
 [T-Route](https://github.com/NOAA-OWP/t-route) is the standard routing package shipped with [ngen](https://github.com/NOAA-OWP/ngen) and is installed by default when [building ngen with Docker](./4-run_ngen.md/#). This includes support for e.g., Muskingum-Cunge (MC) and diffusive wave routing methods.
 
 For the purposes of this module, we only demonstrate usage of troute within ngen as a post-processor. If you wish to do routing standalone, please see the repo's [official documentation](https://github.com/NOAA-OWP/t-route/blob/master/readme.md).
 
-### Example
+### T-Route Example
 
 To run e.g. MC routing for our example catchment `cat-2453` in ngen,
 
 ```bash
 # ngen
 
-
-
 # or with Docker (recommended)
-
-
 
 ```
 
@@ -39,19 +35,48 @@ This routing method has been demonstrated alongside naive hydrograph routing met
 
 ### DDR Setup
 
-#### (1) Code
+#### (1) Installation
 
-Clone the repo:
+1. Clone the repository:
 
-...
+    ```bash
+    git clone https://github.com/leoglonz/ddr.git
+    cd ddr
+    ```
+
+2. Optional - Create a conda/venv environment to isolate dependencies:
+
+    DDR requires `>=Py3.11`, so a new env may be required if dhbv2 was previously installed for ngen.
+
+    ```bash
+    conda create -n ddr python=3.11
+    conda activate ddr
+
+    # or (recommended)
+
+    uv venv --python=3.11 .venv_ddr
+    source .venv_ddr/bin/activate
+    ```
+
+3. Install dependencies:
+
+    We recommend [Astral UV](https://docs.astral.sh/uv/) to install packages (available via `pip install uv`), however standard `pip install` will also work.
+
+    ```bash
+    cd ./ddr
+    uv pip install . ./engine
+
+    # or in editable mode
+    uv pip install -e . -e ./engine
+    ```
 
 #### (2) Data
 
 ...
 
-### Example
+### DDR Example
 
-To run δMC routing for our example catchment `cat-2453`,
+To run δMC routing for our example catchments `cat-2453`, `cat-2454`, `cat-2455`
 
 ```bash
 
