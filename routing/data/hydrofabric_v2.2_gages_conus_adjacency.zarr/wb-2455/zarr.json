@@ -1,0 +1,18 @@
+{
+  "attributes": {
+    "format": "COO",
+    "shape": [
+      828289,
+      828289
+    ],
+    "gage_wb": "wb-2455",
+    "gage_idx": 822012,
+    "data_types": {
+      "indices_0": "int32",
+      "indices_1": "int32",
+      "values": "int8"
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

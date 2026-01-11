@@ -22,7 +22,7 @@
     ],
     "forcing": {
       "file_pattern": ".*{{id}}.*.csv",
-      "path": "./data/forcing/camels",
+      "path": "./data/forcing/",
       "provider": "CsvPerFeature"
     }
   },
@@ -30,6 +30,9 @@
     "start_time": "2008-01-09 00:00:00",
     "end_time": "2010-12-30 23:00:00",
     "output_interval": 3600
+  },
+  "routing":{
+    "t_route_config_file_with_path": "./data/dhbv_2_mts/config/routing_config.yaml"
   },
   "output_root": "./data/output/"
 }
