@@ -16,7 +16,7 @@ This module provides the δHBV 2.0 (Daily) and δHBV 2.0 MTS (Hourly) models wra
 
 ### (1) Standalone Python Installation
 
-Do this if you plan to use the BMI(s) on their own or develop on this module.
+Do this if you plan to use the dhbv2 on its own or develop on the module.
 
 1. Clone the repository:
 
@@ -41,7 +41,7 @@ Do this if you plan to use the BMI(s) on their own or develop on this module.
 
 3. Install dependencies:
 
-    We recommend [Astral UV](https://docs.astral.sh/uv/) to install packages (available via `pip install uv`), however standard `pip install` will also work.
+    We recommend [Astral UV](https://docs.astral.sh/uv/) to install packages (available via `pip install uv`), however a standard `pip install` will also work.
 
     ```bash
     uv pip install .
@@ -68,11 +68,11 @@ Do this if you plan to use the BMI(s) on their own or develop on this module.
 
     unzip ./temp/dhbv_2.zip -d ./temp
 
-    mv ./temp/dhbv_2/ ./ngen_resources/data/dhbv2/model/
+    mv ./temp/dhbv_2/ ./ngen_resources/data/dhbv_2/model/
     rm -r ./temp
     ```
 
-    or install [from your browser](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/owp/dhbv_2.zip) (slower) and move contents to `/ngen_resources/data/dhbv2/model/`.
+    or install [from your browser](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/owp/dhbv_2.zip) (slower) and move contents to `/ngen_resources/data/dhbv_2/model/`.
 
     For hourly (MTS):
 
@@ -101,10 +101,11 @@ To use this module within the [NextGen framework](https://github.com/NOAA-OWP/ng
     * [CIROH-UA/ngen](https://github.com/CIROH-UA/ngen) (AWI fork; for NextGen In A Box)
 
     ```bash
+    git clone <ngen-repo>
     cd ngen
     ```
 
-2. Add and initialize dhbv2 as a github submodule:
+2. Add and initialize dhbv2 as a git submodule:
 
     ```bash
     git submodule add https://github.com/mhpi/dhbv2 ./extern/dhbv2
@@ -147,9 +148,9 @@ To use this module within the [NextGen framework](https://github.com/NOAA-OWP/ng
 
 </br>
 
-## Directory Structure
+## Directory Structure (NextGen)
 
-After installation, your structure should look like this within NextGen:
+After installation, your structure should look like this within ngen:
 
 ```text
 ngen/
@@ -163,6 +164,6 @@ ngen/
 │   ├── dhbv_2                 # Configs, ...
 │   ├── dhbv_2_mts             # Configs, ...
 │   ├── forcing               # Forcings
-│   └── spatial               # HydroFabric data
+│   └── geo               # HydroFabric data
 └── ...
 ```

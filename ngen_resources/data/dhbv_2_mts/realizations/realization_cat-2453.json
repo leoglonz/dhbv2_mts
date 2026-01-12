@@ -22,14 +22,14 @@
     ],
     "forcing": {
       "file_pattern": ".*{{id}}.*.csv",
-      "path": "./data/forcing/camels",
+      "path": "./data/forcing/",
       "provider": "CsvPerFeature"
     }
   },
   "time": {
     "start_time": "2008-01-09 00:00:00",
-    "end_time": "2010-12-30 23:00:00",
+    "end_time": "2009-01-30 23:00:00",
     "output_interval": 3600
   },
-  "output_root": "./data/output/"
+  "output_root": "./output/"
 }

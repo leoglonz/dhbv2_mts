@@ -10,7 +10,8 @@ network_topology_parameters:
   supernetwork_parameters:
     #----------
     network_type: HYFeaturesNetwork
-    geo_file_path: ./data/dhbv2_mts/ngen_resources/data/geo/camels_hf2.gpkg
+    geo_file_path: ./data/geo/camels_subset_hf2.gpkg
+
     columns:
       key: 'id'
       downstream: 'toid'
@@ -19,15 +20,14 @@ network_topology_parameters:
       ncc : 'nCC'
       s0 : 'So'
       bw : 'BtmWdth'
-      waterbody : 'rl_NHDWaterbodyComID'
-      gages : 'rl_gages'
+      waterbody : 'WaterbodyID'
+      gages : 'gage'
       tw : 'TopWdth'
       twcc : 'TopWdthCC'
       musk : 'MusK'
       musx : 'MusX'
       cs : 'ChSlp'
       alt: 'alt'
-      mainstem: 'mainstem'
 
   waterbody_parameters:
       #----------
@@ -41,9 +41,10 @@ compute_parameters:
   assume_short_ts        : True
   subnetwork_target_size : 10000
   cpu_pool               : 36
+
   restart_parameters:
     #----------
-    start_datetime: "2009-01-09_00:00:00"
+    start_datetime: "2009-01-09 00:00:00"
 
   forcing_parameters:
     #----------
@@ -52,9 +53,9 @@ compute_parameters:
     # Ngen's timestep divided by t-route's (e.g. 3600/300)
     qts_subdivisions            : 12
     # Total simulation t-route timesteps (e.g. 12 per hour, 288 per day)
-    nts                         : 8640
+    nts                         : 111744.0
     # Number of external (ngen) timesteps (NOTE: must change if time period changes)
-    max_loop_size               : 720 # [hr]
+    max_loop_size               : 9312.0 # [hr]
     # The location to find the nex-* CSV files
     qlat_input_folder           : ./data/output/
     nexus_input_folder         : ./data/output/
@@ -62,14 +63,15 @@ compute_parameters:
     qlat_file_pattern_filter    : "nex-*"
     nexus_file_pattern_filter   : "nex-*"
     # A directory where the temporary *.parquet files will be stored
-    binary_nexus_file_folder    : ./data/output/troute_tmp/
+    # binary_nexus_file_folder    : ./data/output/troute_tmp/
 
   data_assimilation_parameters:
     #----------
-    usgs_timeslices_folder   : ./usgs_TimeSlice/
-    usace_timeslices_folder  : #usace_TimeSlice/
-    timeslice_lookback_hours : #48
-    qc_threshold             : #1
+    # usgs_timeslices_folder   : ./usgs_TimeSlice/
+    # usace_timeslices_folder  : #usace_TimeSlice/
+    # timeslice_lookback_hours : #48
+    # qc_threshold             : #1
+
     streamflow_da:
       #----------
       streamflow_nudging: False
@@ -92,5 +94,5 @@ output_parameters:
   stream_output :
     stream_output_directory: ./data/output/stream_output/
     stream_output_time: 1 #[hr]
-    stream_output_type: '.csv' #please select only between netcdf '.nc' or '.csv' or '.pkl'
+    stream_output_type: '.nc' #please select only between netcdf '.nc' or '.csv' or '.pkl'
     stream_output_internal_frequency: 60 #[min] it should be order of 5 minutes. For instance if you want to output every hour put 60
