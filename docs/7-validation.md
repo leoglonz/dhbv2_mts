@@ -10,7 +10,7 @@ This module includes benchmark runoff simulations for daily and hourly δHBV2.0 
 
 ### (2) MTS (Hourly) Model
 
-The script `tests/test_mts_bmi.py` can be used to validate your MTS runtime for the catchment `cat-2453` with simulation output from `2009-01-01 00:00:00` to `2010-12-30 23:00:00`.
+The script `./tests/test_mts_bmi.py` can be used to validate your MTS runtime for the catchment `cat-2453` with simulation output from `2009-01-01 00:00:00` to `2010-12-30 23:00:00`.
 
 To validate,
 

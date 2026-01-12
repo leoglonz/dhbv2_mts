@@ -1,8 +1,6 @@
 # Running with NextGen
 
-> Valid as of 28 Dec. 2025
-
-To run δHBV 2.0 within the NextGen framework, you must configure a **Realization** file (JSON) that points to the correct Python class and BMI configuration.
+To run δHBV 2.0 within the NextGen framework, you must configure a **realization** file (JSON) that points to the correct Python class and BMI configuration.
 
 </br>
 
@@ -15,7 +13,7 @@ git clone git@github.com:NOAA-OWP/ngen.git
 cd ngen
 ```
 
-> For AWI's NextGen IN A Box (NGIAB), see the ngen fork [CIROH-UA/ngen](https://github.com/CIROH-UA/ngen).
+> For AWI's NextGen IN A Box (NGIAB), see the fork [CIROH-UA/ngen](https://github.com/CIROH-UA/ngen).
 
 ### (1) Submodule
 
@@ -36,7 +34,11 @@ git submodule update --init --recursive
 
 ### (2) NextGen
 
-To build, we recommend using Docker as the [developers suggest](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md). A [Dockerfile](../ngen_resources/docker/) supporting dhbv2 is included with this repo. Copy this Dockerfile to ngen and build:
+NextGen is a C++ compiled framework. There are two options for installing its dependencies and building: Manually or with Docker. The latter builds an isolated container for NextGen and and simplifies the build process.
+
+We recommend using Docker as the [developers suggest](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md), and a [Dockerfile](../ngen_resources/docker/) supporting dhbv2 is included with this repo. We will not cover manual installation here; for instructions, see [NOAA-OWP/ngen/INSTALL.md](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md).
+
+For Docker installation, copy the Dockerfile to ngen and build:
 
 ```bash
 cp ./dhbv2/ngen_resources/docker/ngen_dhbv2.dockerfile ./ngen/docker/
@@ -48,9 +50,7 @@ docker build . \
     --network=host
 ```
 
-> For e.g., HPCs, include the additional argument `--network=host` with docker build if you encounter failure due to network connection.
-
-#### Docker
+> For e.g., HPCs, the additional argument `--network=host` should avoid any failure due to network connection.
 
 To inspect the container after building an image:
 
@@ -63,13 +63,13 @@ To cleanup old Docker images/containers:
 ```bash
 docker rm `docker ps --no-trunc -aq`
 docker images -q --filter "dangling=true" | xargs docker rmi
-```
 
-or
+# or
 
-```bash
 docker system prune -f
 ```
+
+</br>
 
 ## Python Types
 
@@ -80,9 +80,11 @@ docker system prune -f
 
 ## Configuration Examples
 
-### (1) Daily Simulation (`realization_cat-88306.json`)
+### (1) Daily Simulation
 
 ```json
+# ./ngen_resources/data/dhbv_2/config/bmi_cat-2453.yaml
+
 {
   "global": { "time": { "output_interval": 86400 } },
   "catchments": {
@@ -93,8 +95,8 @@ docker system prune -f
           "params": {
             "python_type": "dhbv2.bmi.DeltaModelBmi",
             "model_type_name": "DeltaModelBmi",
-            "init_config": "./data/dhbv2/config/bmi_cat-88306.yaml",
-            "uses_forcing_file": true,
+            "init_config": "./data/dhbv_2/config/bmi_cat-2453.yaml",
+            "uses_forcing_file": false,
             "main_output_variable": "land_surface_water__runoff_volume_flux",
             ...
           }
@@ -106,9 +108,11 @@ docker system prune -f
 }
 ```
 
-### (2) Hourly (MTS) Simulation (`realization_cat-2453.json`)
+### (2) Hourly (MTS) Simulation
 
 ```json
+# ./ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml
+
 {
   "global": { "time": { "output_interval": 3600 } },
   "catchments": {
@@ -136,97 +140,140 @@ docker system prune -f
 
 ## Execution
 
-Run the NextGen engine pointing to the realization file:
+We give a few examples to illustrate NextGen execution. In all cases, we will require
+
+1. **NextGen HydroFabric** (subset) for desired catchments stored as either a geojson or geopackage;
+2. **realization** Json that configures the ngen runtime
+3. the **name of each catchment and nexus** to simulate. If doing simulation for all catchments in your HydroFabric, these need not be specified.
+
+To run, we point our ngen executable to the above. For a single catchment,
 
 ```bash
+cd ./ngen
+
+# Geojson
 ./cmake_build/ngen \
-    /path/to/catchment_data.geojson "cat-2453" \
-    /path/to/nexus_data.geojson "nex-2454" \
-    /path/to/realization_cat-2453.json
-```
-
-or, with a docker image,
-
-```bash
-# With geojson for 1 catchment
-docker run --rm \
-    -v $(pwd)/data:/ngen/data \
-    localbuild/ngen:latest \
-    ./ngen \
     /path/to/catchment_data.geojson 'cat-2453' \
     /path/to/nexus_data.geojson 'nex-2454' \
-    ./data/dhbv_2_mts/realizations/realization_cat-2453.json
+    data/dhbv_2_mts/realizations/realization_cat-2453.json
 
-# With geopackage
+# Geopackage
+./cmake_build/ngen \
+    data/geo/camels_subset_hf2.gpkg 'cat-2453' \
+    data/geo/camels_subset_hf2.gpkg 'nex-2454' \
+    data/dhbv_2_mts/realizations/realization_cat-2453.json
+
+# Or with Docker
+
 docker run --rm \
     -v $(pwd)/data:/ngen/data \
+    -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
-    ./ngen \
-    ./data/geo/camels_hf2.gpkg 'cat-2453' \
-    ./data/geo/camels_hf2.gpkg 'nex-2454' \
-    ./data/dhbv_2_mts/realizations/realization_cat-2453.json
+    ngen \
+    data/geo/camels_subset_hf2.gpkg 'cat-2453' \
+    data/geo/camels_subset_hf2.gpkg 'nex-2454' \
+    data/dhbv_2_mts/realizations/realization_cat-2453.json
 ```
 
-To run all catchments defined in the geopackage/geojson, leave catchment and nexus (e.g., `'cat-2453'` and `'nex-2454'`) defined as `''`.
+With default settings, ngen outputs will save to `./ngen/output/`.
 
-> Note: If using Docker, make sure `output_root` in your realization begins with `/ngen/data/`. This will ensure ngen outputs are accessible outside of your Docker container in `./ngen/data/`.
-> Note: with default settings, ngen output will save to `./ngen/data/output/`
+> Notes on Docker:
+>
+> We use `-v $(pwd)/data:/ngen/data` to replace the container's internal data directory with that of your local directory. This enables usate and modification of realizations, configs, etc. outside of the container. `-v $(pwd)/output:/ngen/output` similarly ensures outputs are accessible outside of the container. `localbuild/ngen:latest` is the name of the Docker image.
+>
+> `output_root` in your realization should begin with `./output/` or otherwise matches your flag `-v $(pwd)/output:/ngen/output`. This ensures ngen outputs are saved outside of the Docker container.
+
+To run all catchments defined in the geopackage/geojson (3 in our example), leave catchment and nexus arguments (e.g., `'cat-2453'` and `'nex-2454'`) undefined like so:
+
+```bash
+cd ./ngen
+
+./cmake_build/ngen \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/dhbv_2_mts/realizations/realization_cat-2453.json
+
+# Or with Docker
+
+docker run --rm \
+    -v $(pwd)/data:/ngen/data \
+    -v $(pwd)/output:/ngen/output \
+    localbuild/ngen:latest \
+    ngen \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/dhbv_2_mts/realizations/realization_cat-2453.json
+```
+
+For instructions on routing NextGen runoff simulations, see [6-routing](./6-routing.md).
+
+<br/>
 
 ## Validation
 
-> Tests supplied by ngen and troute repositories.
+Tests supplied by ngen and troute repositories can be used to verify your Docker installation is behaving as expected.
 
 ### (1) Compile Time
 
-To view the compile-time configuration of an pre-compiled NextGen binary use
+To view the compile-time configuration of the NextGen binary, use
 the --info flag:
 
 ```bash
 docker run --rm \
     -v $(pwd)/data:/ngen/data \
     localbuild/ngen:latest \
-    ./ngen --info
+    ngen --info
 ```
 
 ### (2) NextGen Tests
 
-To run stock ngen tests (visible with `docker run --rm localbuild/ngen:latest ls /ngen/test`) within a Docker container, use e.g.,
+To run stock ngen tests within a Docker container, use e.g.,
 
 ```bash
+# Unit tests
 docker run --rm localbuild/ngen:latest ./test/test_unit
+
+# or all tests
+docker run --rm localbuild/ngen:latest ./test/test_all
 ```
 
-Example realizations can also be run with
+A list of all available tests can be found with `docker run --rm localbuild/ngen:latest ls /ngen/test`.
+
+To break output at a failure, append `--gtest_break_on_failure` to the above.
+
+### (3) NextGen Example
+
+As demonstrated previously, ngen's example realizations can be run like
 
 ```bash
 docker run --rm \
     -v $(pwd)/data:/ngen/data \
+    -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
-    ./ngen \
+    ngen \
     data/catchment_data.geojson '' \
     data/nexus_data.geojson '' \
     data/example_bmi_multi_realization_config.json
 ```
 
-### (3) T-Route Tests
+### (4) T-Route Tests
 
-NextGen-integrated troute can be validated as follows:
+NextGen-integrated T-route can be validated using
 
 ```bash
 docker run --rm localbuild/ngen:latest ./test/test_routing_pybind
 ```
 
-Troute can be run standalone with the examples it ships with:
+### (5) T-Route Example
+
+T-Route examples can be run in Docker containers like
 
 ```bash
 docker run --rm \
-  -w /ngen/extern/t-route/test/LowerColorado_TX \
-  localbuild/ngen:latest \
-  python -m nwm_routing -f -V4 test_AnA_V4_NHD.yaml
-
-
-docker run --rm \
-  -w /ngen/troute/test/LowerColorado_TX_v4 \
-  localbuild/ngen:latest \
-  python -m nwm_routing -f -V4 test_AnA_V4_HYFeature.yaml
+    -v $(pwd)/output:/ngen/output
+    -w /ngen/t-route/test/LowerColorado_TX \
+    localbuild/ngen:latest \
+    python -m nwm_routing -f -V4 test_AnA_V4_NHD.yaml
 ```
+
+See [NOAA-OWP/t-route](https://github.com/NOAA-OWP/t-route) for more details.
