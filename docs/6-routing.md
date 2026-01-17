@@ -52,7 +52,7 @@ docker run --rm \
     ngen \
     data/geo/camels_subset_hf2.gpkg '' \
     data/geo/camels_subset_hf2.gpkg '' \
-    data/dhbv_2_mts/realizations/realization_routing_cat-2453.json
+    data/dhbv_2_mts/realizations/realization_troute_cat-2453.json
 ```
 
 Outputs will save by default to `./ngen/output/stream_output`.

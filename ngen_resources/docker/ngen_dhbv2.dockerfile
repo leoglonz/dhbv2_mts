@@ -14,18 +14,15 @@ ARG TROUTE_BRANCH=ngiab
 
 # Stage 1: Base image with dependencies
 FROM rockylinux:9.1 AS base
-ARG NPROC
-ARG TROUTE_REPO
-ARG TROUTE_BRANCH
 
 RUN echo "max_parallel_downloads=10" >> /etc/dnf/dnf.conf
-RUN dnf update -y && \
-    dnf install -y epel-release && \
-    dnf config-manager --set-enabled crb && \
-    dnf install -y \
-    vim libgfortran sqlite \
-    bzip2 expat udunits2 zlib \
-    mpich hdf5 netcdf netcdf-fortran netcdf-cxx netcdf-cxx4-mpich
+RUN dnf update -y \
+    && dnf install -y epel-release \
+    && dnf config-manager --set-enabled crb \
+    && dnf install -y \
+        vim libgfortran sqlite bzip2 expat udunits2 zlib mpich hdf5 \
+        netcdf netcdf-fortran netcdf-cxx netcdf-cxx4-mpich \
+    && dnf clean all
 
 # Install astral-uv
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -56,7 +53,8 @@ RUN dnf install -y epel-release \
         mpich-devel \
         netcdf-devel hdf5-devel netcdf-fortran-devel netcdf-cxx-devel \
         lld \
-        clang
+        clang \
+    && dnf clean all
 
 
 # Stage 3: Boost setup
@@ -70,6 +68,8 @@ ENV BOOST_ROOT=/boost_1_86_0
 
 # Stage 4: Install T-Route dependencies
 FROM boost_setup AS troute_prebuild
+ARG TROUTE_REPO
+ARG TROUTE_BRANCH
 
 WORKDIR /ngen
 
@@ -84,16 +84,19 @@ ENV PATH="/ngen/.venv/bin:$PATH"
 # make sure clone isn't cached if repo is updated
 ADD https://api.github.com/repos/${TROUTE_REPO}/git/refs/heads/${TROUTE_BRANCH} /tmp/version.json
 
-RUN uv pip install -r https://raw.githubusercontent.com/$TROUTE_REPO/refs/heads/$TROUTE_BRANCH/requirements.txt
+RUN uv pip install -r https://raw.githubusercontent.com/${TROUTE_REPO}/refs/heads/${TROUTE_BRANCH}/requirements.txt
 
 
 # Stage 5: Build T-Route
 FROM troute_prebuild AS troute_build
+ARG TROUTE_REPO
+ARG TROUTE_BRANCH
+ARG NPROC
 
 WORKDIR /ngen/t-route
 
 # Clone and init all submodules
-RUN git clone --depth 1 --single-branch -b $TROUTE_BRANCH https://github.com/$TROUTE_REPO.git . \
+RUN git clone --depth 1 --single-branch -b ${TROUTE_BRANCH} https://github.com/${TROUTE_REPO}.git . \
     && git submodule update --init --recursive --jobs ${NPROC} --depth 1 \
     && uv pip install build wheel
 
@@ -114,18 +117,21 @@ RUN uv build --wheel --no-build-isolation src/troute-nwm/
 FROM troute_prebuild AS ngen_clone
 ARG NGEN_REPO
 ARG NGEN_BRANCH
+ARG NPROC
 
 WORKDIR /ngen
 
 # Clone and init all submodules
 ADD https://api.github.com/repos/${NGEN_REPO}/git/refs/heads/${NGEN_BRANCH} /tmp/version.json
-RUN git clone --recursive --single-branch -b $NGEN_BRANCH https://github.com/${NGEN_REPO}.git \
+RUN git clone --depth 1 --single-branch -b ${NGEN_BRANCH} https://github.com/${NGEN_REPO}.git \
     && cd ngen \
     && git submodule update --init --recursive --jobs ${NPROC} --depth 1
+    # && git submodule update --init --recursive --remote --jobs ${NPROC} --depth 1
 
 
 # Stage 7: Build ngen
 FROM ngen_clone AS ngen_build
+ARG NPROC
 
 ENV VIRTUAL_ENV=/ngen/.venv
 ENV PATH="/ngen/.venv/bin:$PATH"
@@ -148,6 +154,7 @@ ARG COMMON_BUILD_ARGS=" \
     -DNGEN_WITH_TESTS:BOOL=ON \
     -DNGEN_QUIET:BOOL=ON \
     -DUDUNITS_QUIET:BOOL=ON \
+    -DNGEN_UPDATE_GIT_SUBMODULES:BOOL=OFF \
     \
     -DNGEN_WITH_EXTERN_SLOTH:BOOL=ON \
     -DNGEN_WITH_EXTERN_TOPMODEL:BOOL=ON \

@@ -15,7 +15,7 @@ network_topology_parameters:
     columns:
       key: 'id'
       downstream: 'toid'
-      dx : 'length_m'
+      dx : 'Length_m'
       n : 'n'
       ncc : 'nCC'
       s0 : 'So'
@@ -44,7 +44,7 @@ compute_parameters:
 
   restart_parameters:
     #----------
-    start_datetime: "2009-01-09 00:00:00"
+    start_datetime: 2009-01-09 00:00:00
 
   forcing_parameters:
     #----------
@@ -52,18 +52,18 @@ compute_parameters:
     dt                          : 300 # [sec]
     # Ngen's timestep divided by t-route's (e.g. 3600/300)
     qts_subdivisions            : 12
-    # Total simulation t-route timesteps (e.g. 12 per hour, 288 per day)
-    nts                         : 111744.0
+    # Total simulation t-route timesteps (e.g. 12 per hour, 288 per day) So if sim is 10 days, nts=288*10
+    nts                         : 6336.0
     # Number of external (ngen) timesteps (NOTE: must change if time period changes)
     max_loop_size               : 9312.0 # [hr]
     # The location to find the nex-* CSV files
-    qlat_input_folder           : ./data/output/
-    nexus_input_folder         : ./data/output/
+    qlat_input_folder           : ./output/
+    nexus_input_folder         : ./output/
     # The glob pattern to match nexus output files - MUST NOT CHANGE!
     qlat_file_pattern_filter    : "nex-*"
     nexus_file_pattern_filter   : "nex-*"
     # A directory where the temporary *.parquet files will be stored
-    # binary_nexus_file_folder    : ./data/output/troute_tmp/
+    # binary_nexus_file_folder    : ./output/troute_tmp/
 
   data_assimilation_parameters:
     #----------
@@ -92,7 +92,7 @@ compute_parameters:
 output_parameters:
   #----------
   stream_output :
-    stream_output_directory: ./data/output/stream_output/
+    stream_output_directory: ./output/stream_output/
     stream_output_time: 1 #[hr]
     stream_output_type: '.nc' #please select only between netcdf '.nc' or '.csv' or '.pkl'
     stream_output_internal_frequency: 60 #[min] it should be order of 5 minutes. For instance if you want to output every hour put 60

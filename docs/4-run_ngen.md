@@ -20,7 +20,7 @@ cd ngen
 Install dhbv2 as a Git submodule in `./extern` as follows:
 
 ```bash
-git submodule add git@github.com:mhpi/dhbv2.git extern/dhbv2/dhbv2
+git submodule add https://github.com/mhpi/dhbv2.git extern/dhbv2/dhbv2
 
 git submodule update --init --recursive
 ```
@@ -28,13 +28,13 @@ git submodule update --init --recursive
 > Alternatively, clone MHPI's fork of ngen with dhbv2 preinstalled;
 >
 > ```bash
-> git clone git@github.com:mhpi/ngen.git
+> git clone https://github.com/mhpi/dhbv2.git
 > git submodule update --init --recursive
 > ```
 
 ### (2) NextGen
 
-NextGen is a C++ compiled framework. There are two options for installing its dependencies and building: Manually or with Docker. The latter builds an isolated container for NextGen and and simplifies the build process.
+NextGen is a C++ compiled framework. There are two options for installing its dependencies and building: manually or with Docker. The latter builds an isolated container for NextGen and and simplifies the build process.
 
 We recommend using Docker as the [developers suggest](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md), and a [Dockerfile](../ngen_resources/docker/) supporting dhbv2 is included with this repo. We will not cover manual installation here; for instructions, see [NOAA-OWP/ngen/INSTALL.md](https://github.com/NOAA-OWP/ngen/blob/master/INSTALL.md).
 
@@ -51,6 +51,8 @@ docker build . \
 ```
 
 > For e.g., HPCs, the additional argument `--network=host` should avoid any failure due to network connection.
+>
+> For faster builds, set `NPROC` to the number of CPU cores you have available.
 
 To inspect the container after building an image:
 
@@ -213,9 +215,9 @@ For instructions on routing NextGen runoff simulations, see [6-routing](./6-rout
 
 Tests supplied by ngen and troute repositories can be used to verify your Docker installation is behaving as expected.
 
-### (1) Compile Time
+### (1) Build Info
 
-To view the compile-time configuration of the NextGen binary, use
+To view configuration info of the NextGen binary, use
 the --info flag:
 
 ```bash
@@ -256,6 +258,18 @@ docker run --rm \
     data/example_bmi_multi_realization_config.json
 ```
 
+> To make the outputs of this test run available, you may need to add `output_root` to the end of the realization like so:
+>
+> ```bash
+> {
+>    ...,
+>    "time": {
+>        ...
+>    },
+>    "output_root": "./output/"
+>}
+>```
+
 ### (4) T-Route Tests
 
 NextGen-integrated T-route can be validated using
@@ -270,7 +284,7 @@ T-Route examples can be run in Docker containers like
 
 ```bash
 docker run --rm \
-    -v $(pwd)/output:/ngen/output
+    -v $(pwd)/output:/ngen/output \
     -w /ngen/t-route/test/LowerColorado_TX \
     localbuild/ngen:latest \
     python -m nwm_routing -f -V4 test_AnA_V4_NHD.yaml
