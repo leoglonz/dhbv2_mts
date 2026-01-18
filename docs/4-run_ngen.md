@@ -207,6 +207,28 @@ docker run --rm \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 ```
 
+Realizations can accomodate catchment-specific formulations in addition to the "global" formulation. This is useful, for example, if each catchment needs a specific BMI config containing spatially distinct physical attributes (as is the case for dhbv2). See `data/dhbv_2_mts/realizations/realization_multi_cat.json`, which can also be used like
+
+```bash
+cd ./ngen
+
+./cmake_build/ngen \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/dhbv_2_mts/realizations/realization_multi_cat-2453.json
+
+# Or with Docker
+
+docker run --rm \
+    -v $(pwd)/data:/ngen/data \
+    -v $(pwd)/output:/ngen/output \
+    localbuild/ngen:latest \
+    ngen \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2.gpkg '' \
+    data/dhbv_2_mts/realizations/realization_multi_cat-2453.json
+```
+
 For instructions on routing NextGen runoff simulations, see [6-routing](./6-routing.md).
 
 <br/>
