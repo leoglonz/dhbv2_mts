@@ -119,7 +119,7 @@ To use this module within the [NextGen framework](https://github.com/NOAA-OWP/ng
     ```bash
     cd ngen
 
-    mv ./extern/dhbv2/dhbv2/ngen_resources/data ./data/.
+    cp -a ./extern/dhbv2/dhbv2/ngen_resources/data/. ./data/
     ```
 
 4. Add model weights:

@@ -1,6 +1,6 @@
 # Routing Runoff Simulations
 
-After runoff simulations have been obtained from δHBV 2.0, there are a few options for routing flow through the river network.
+After obtaining runoff simulations from δHBV 2.0, there are a few options for routing flow through the river network.
 
 The network can be defined in several ways, with [MERIT-hydro](https://www.reachhydro.org/home/params/merit-basins) and the [NextGen HydroFabric](https://github.com/NOAA-OWP/hydrofabric) being notable examples. In the context of NextGen (ngen), we demonstrate routing on the HydroFabric v2.2 (download [v2.2 source](https://www.lynker-spatial.com) or [AWI-patched v2.2](https://github.com/CIROH-UA/community_hf_patcher/tree/main)) river network with ~4km resolution.
 
@@ -52,7 +52,7 @@ docker run --rm \
     ngen \
     data/geo/camels_subset_hf2.gpkg '' \
     data/geo/camels_subset_hf2.gpkg '' \
-    data/dhbv_2_mts/realizations/realization_routing_cat-2453.json
+    data/dhbv_2_mts/realizations/realization_troute_cat-2453.json
 ```
 
 Outputs will save by default to `./ngen/output/stream_output`.
