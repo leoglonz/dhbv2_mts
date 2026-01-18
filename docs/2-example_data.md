@@ -1,34 +1,44 @@
 # Example Data
 
-To run the models, you will need two types of data:
+To run dhbv2 models, you will need two types of data:
 
-1. **Forcing Data:** Precipitation, Temperature, and PET (Potential EvapoTranspiration).
-2. **Catchment Attributes:** Static properties (soil, slope, elevation, etc.).
+1. **Forcings:** Precipitation, Temperature, and PET (Potential EvapoTranspiration).
+2. **Catchment Attributes:** Static spatial properties (soil, slope, elevation, etc.).
+
+For NextGen runtime, a **hydrofabric geopackage** containing desired catchments is also required.
 
 </br>
 
 ## Quick Start
 
-We provide prepared datasets containing a subset of AORC forcings and NextGen HydroFabric 2.2 attributes for CAMELS catchments.
+This module provides an example dataset containing AORC forcings and catchment attributes for a subset of catchments in the defined by CAMELs.
 
-See [NCAR](https://ral.ucar.edu/solutions/products/camels) for more information on the CAMELS dataset.
+See [NCAR](https://ral.ucar.edu/solutions/products/camels) for more information on the CAMELS.
 
-### Daily
-
->[Coming Soon]
-
-### Hourly
+Example data is as follows:
 
 - Catchments: [`2453`, `2454`, `2455`]
 
-- Time: `2008-01-09 00:00:00` to `2010-12-30 23:00:00`.
+- Time: `2008-01-09 00:00:00` to `2015-12-30 23:00:00`.
 
-Forcing location:
+- Forcings:
 
-- NetCDF: `./ngen_resources/data/forcing/camels_2008-01-09 00_00_00_2010-12-30 23_00_00.nc`
-- CSV: `./ngen_resources/data/forcing/cat-2453_2004-10-01 00_00_00_2018-09-30 23_00_00.csv`
+  - NetCDF: `./ngen_resources/data/forcing/camels_subset_2008-01-09 00_00_00_2015-12-30 23_00_00.nc`
 
-Attribute location: Currently stored in BMI config. BMI will later support direct reading from a remotely hosted HydroFabric geopackage with attributes for all 800k catchments.
+  - CSV: `./ngen_resources/data/forcing/cat-xxxx_2004-10-01 00_00_00_2018-09-30 23_00_00.csv`
+
+- Attributes:
+
+  - Stored in BMI configs `./ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml`. *BMI will later support direct reading from a remotely hosted HydroFabric geopackage with attributes for all 800k catchments.*
+
+- Geopackage:
+  - `./ngen_resources/data/geo/camels_subset_hf2.gpkg`
+
+<br/>
+
+> (i) To create NextGen HydroFabric geopackages for other catchments, see `./scripts/utils/make_gpkg.py`.
+>
+> (ii) A script for getting static attributes for other catchments will be added at a later time.
 
 <!-- **Download Link:**
 [AWS S3 - NextGen Demo Data](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/aorc_hydrofabric/ngen_demo.zip) -->
@@ -39,29 +49,31 @@ Attribute location: Currently stored in BMI config. BMI will later support direc
 
 ### CSV/NetCDF Format (NextGen Standard)
 
-dhbv2 BMI expects a CSV/NetCDF file with minimum attributes:
+The dhbv2 BMIs expects a CSV/NetCDF file with minimum attributes:
 
 - `time`: Timestamp (ns)
 
-- `precip_rate[mm h-1]`: Precipitation mm/h (note ngen will assume `precip_rate` is in `mm s-1` unless we include the unit header as is done here.)
+- `precip_rate[mm h-1]`: Precipitation in mm/h (note that NextGen will assume `precip_rate` is in `mm s-1` unless a unit header as included as is done here.)
 
-- `TMP_2maboveground`: Air Temperature (K)
+- `TMP_2maboveground`: Air Temperature in K.
 
-- `PET_hargreaves`: Potential Evapotranspiration (This can be calculated and added to an existing dataset with `dhbv2/scripts/add_pet.py`)
+- `PET_hargreaves`: Potential evapotranspiration in mm/h. (This can be calculated and added to an existing dataset with `./scripts/utils/add_pet.py`.)
 
-Note: The MTS model requires hourly data, while the standard model operates on daily aggregates.
+<br/>
+
+> The [MTS model](../src/dhbv2/mts_bmi.py) requires hourly data, while the [standard model](../src/dhbv2/bmi.py) operates on daily aggregates.
 
 ## Data Placement
 
-<!-- Unzip the contents and place them so that the configuration files can find them. We recommend the following structure inside the `dhbv2` package or your NextGen data directory: -->
+Example data in `./ngen_resources/` is arranged to mirror organization within NextGen. Therefore, usage with NextGen simply requires moving its contents to `ngen/data/`. See [4-run_ngen](./4-run_ngen.md) for more detail.
 
 ```text
 dhbv2/
 └── ngen_resources/
     └── data/
         ├── dhbv2/            # Daily model resources
-        │   ├── config/       # BMI YAML configs
-        │   ├── models/       # PyTorch weights & stats
+        │   ├── config/       # BMI/Routing YAML configs
+        │   ├── models/       # PyTorch weights & normalization stats
         │   └── realizations/ # NextGen JSON realizations
         │
         ├── dhbv2_mts/        # MTS (hourly) model resources
@@ -69,9 +81,10 @@ dhbv2/
         │   ├── models/
         │   └── realizations/
         │
-        ├── forcing/          # CSV or NetCDF forcings
+        ├── forcing/          # CSV/NetCDF forcings
+        │   ├── camels_subset_2008...nc
         │   └── cat-2453_2008...csv
         │
-        └── spatial/          # GeoJSON/HydroFabric data
-            └── catchment_data_cat-2453.geojson
+        └── geo/          # GeoJSON/Geopackage HydroFabric data
+            └── camels_subset_hf2.gpkg
 ```

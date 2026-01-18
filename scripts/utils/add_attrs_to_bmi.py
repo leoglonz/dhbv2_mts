@@ -8,30 +8,36 @@ in the CONUS HF.
 
 import xarray as xr
 from ruamel.yaml import YAML
+from pathlib import Path
 
-CAT = 16867
-attrs_path = '/projects/mhpi/yxs275/hourly_model/mtsHBV/data/CAMELS_HFs_attr_new.nc'
-target_path = f'/projects/mhpi/leoglonz/ciroh-ua/dhbv2_mts/ngen_resources/data/dhbv2_mts/config/bmi_cat-{CAT}.yaml'
+# Setup pathing
+pkg_root = Path(__file__).parent.parent.parent
 
 
-attrs_ds = xr.open_dataset(attrs_path).sel(gauge=CAT)
+### -------- Settings -------- ###
+CAT_ID = 2455
+ATTRS_PATH = '/projects/mhpi/yxs275/hourly_model/mtsHBV/data/CAMELS_HFs_attr_new.nc'
+TARGET_PATH = f'{pkg_root}/ngen_resources/data/dhbv_2_mts/config/bmi_cat-{CAT_ID}.yaml'
+### -------------------------- ###
 
-# Initialize the preserved-format loader
-yml = YAML()
-yml.preserve_quotes = True
 
-# 1. Load data
-with open(target_path) as f:
-    config_data = yml.load(f)
+if __name__ == '__main__':
+    attrs_ds = xr.open_dataset(ATTRS_PATH).sel(gauge=CAT_ID)
 
-# 2. Update existing keys
-for var_name in attrs_ds.data_vars:
-    key = str(var_name)
-    if key in config_data:
-        # Rounding is often nice for config files to avoid 10.55000019
-        val = attrs_ds[var_name].item()
-        config_data[key] = val
+    yml = YAML()
+    yml.preserve_quotes = True
 
-# 3. Dump back (Comments and structure are preserved automatically)
-with open(target_path, 'w') as f:
-    yml.dump(config_data, f)
+    # Load data
+    with open(TARGET_PATH) as f:
+        config_data = yml.load(f)
+
+    # Update existing keys
+    for var_name in attrs_ds.data_vars:
+        key = str(var_name)
+        if key in config_data:
+            val = attrs_ds[var_name].item()
+            config_data[key] = val
+
+    # Dump back (comments and structure are preserved automatically)
+    with open(TARGET_PATH, 'w') as f:
+        yml.dump(config_data, f)

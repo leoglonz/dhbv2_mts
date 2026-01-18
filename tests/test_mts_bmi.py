@@ -28,7 +28,7 @@ TOLERANCE = 1e-5
 
 if __name__ == "__main__":
     # Load simulation and validation data
-    runoff_sim = np.load(SIM_PATH)[8592:]
+    runoff_sim = np.load(SIM_PATH)
     runoff_val = np.load(VAL_PATH)
 
     if runoff_sim.shape != runoff_val.shape:

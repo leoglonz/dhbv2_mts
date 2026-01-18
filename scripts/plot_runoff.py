@@ -1,6 +1,9 @@
 """
-Plot dhbv2 runoff generated from BMI/NextGen.
+Plot hydrograph of dhbv2 runoff generated from BMI/NextGen.
 
+Be aware that if you use outputs generated from ./scripts/forward_mts_xx.py, the
+first 358 days of runtime are already discarded. NextGen output will include
+spinup, and therefore plots will show 0 flow for that period unless you remove it.
 @leoglonz
 """
 
@@ -22,10 +25,10 @@ pkg_root = Path(__file__).parent.parent
 
 ### -------- Settings -------- ###
 # Numpy file with dhbv2 runoff data
-SIM_PATH = f"{pkg_root}/output/dhbv_2_mts_cat-2453_runoff.npy"
-SAVE_PATH = f"{pkg_root}/output/runoff_simulation.png"
-TIME_START = "2008-01-09 00:00:00"
-TIME_END = "2010-12-30 23:00:00"
+SIM_PATH = f'{pkg_root}/output/dhbv_2_mts_cat-2453_runoff.npy'
+SAVE_PATH = f'{pkg_root}/output/runoff_simulation.png'
+TIME_START = '2008-01-09 00:00:00'
+TIME_END = '2010-12-30 23:00:00'
 ### -------------------------- ###
 
 
@@ -33,10 +36,10 @@ def plot_hydrograph(
     timesteps: pd.DatetimeIndex,
     predictions: Union[NDArray[np.float32], torch.Tensor],
     resample: Literal['d', 'w', 'm', 'y'] = 'd',
-    title: str = "Hydrograph",
-    ylabel: str = "Runoff",
-    line_label: str = "Prediction",
-    color: str = "blue",
+    title: str = 'Hydrograph',
+    ylabel: str = 'Runoff',
+    line_label: str = 'Prediction',
+    color: str = 'blue',
     minor_ticks: bool = False,
     figsize: tuple = (12, 8),
     fontsize: int = 12,
@@ -44,7 +47,7 @@ def plot_hydrograph(
     save_path: Optional[str] = None,
 ) -> None:
     """Plot hydrograph for a single catchment (1D time series)."""
-    # --- 1. Data Preparation ---
+    # --- 1. Data preparation ---
     if isinstance(predictions, torch.Tensor):
         predictions = predictions.detach().cpu().numpy()
 
@@ -57,7 +60,7 @@ def plot_hydrograph(
             f"does not match Timesteps length ({len(timesteps)})",
         )
 
-    # Create DataFrame for resampling
+    # Create df for resampling
     data = pd.DataFrame({'time': timesteps, 'pred': predictions})
 
     # Resample
@@ -99,7 +102,7 @@ def plot_hydrograph(
     plt.show()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # Load simulation data
     runoff_sim = np.load(SIM_PATH)
     print(f"Loaded {runoff_sim.shape[0]} hours")
