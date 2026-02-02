@@ -124,3 +124,7 @@ convention = "numpy"
 [tool.ruff.format]
 quote-style = "preserve"
 docstring-code-format = true
+
+[tool.ruff.lint.isort]
+known-first-party = ["dhbv2"]
+combine-as-imports = true

@@ -19,8 +19,8 @@ from dmg.core import Dates
 from numpy.typing import NDArray
 
 from dhbv2.log import configure_logging, log
-from dhbv2.utils import RingBuffer
 from dhbv2.pet import penman_monteith_pet
+from dhbv2.utils import RingBuffer
 
 root_path = os.path.dirname(os.path.abspath(__file__))
 
