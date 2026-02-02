@@ -19,6 +19,7 @@ from dmg.core import Dates
 from numpy.typing import NDArray
 
 from dhbv2.log import configure_logging, log
+from dhbv2.pet import penman_monteith_pet
 from dhbv2.utils import RingBuffer
 
 root_path = os.path.dirname(os.path.abspath(__file__))
@@ -29,8 +30,13 @@ root_path = os.path.dirname(os.path.abspath(__file__))
 # ------------------------------------------------ #
 _dynamic_input_vars = [
     ('atmosphere_water__liquid_equivalent_precipitation_rate', 'mm h-1'),
-    ('land_surface_air__temperature', 'degK'),
-    ('water_potential_evaporation_flux', 'mm h-1'),
+    ('land_surface_air__temperature', 'degC'),
+    ('atmosphere_air_water~vapor__relative_saturation', 'g g-1'),
+    ('land_surface_radiation~incoming~longwave__energy_flux', 'W m-2'),
+    ('land_surface_radiation~incoming~shortwave__energy_flux', 'W m-2'),
+    ('land_surface_air__pressure', 'kPa'),
+    ('land_surface_wind__x_component_of_velocity', 'm s-1'),
+    ('land_surface_wind__y_component_of_velocity', 'm s-1'),
 ]
 
 # ----------------------------------------------- #
@@ -83,7 +89,12 @@ _var_name_internal_map = {
     # ----------- Dynamic inputs -----------
     'P': 'atmosphere_water__liquid_equivalent_precipitation_rate',
     'T': 'land_surface_air__temperature',
-    'PET': 'water_potential_evaporation_flux',
+    'SPFH': 'atmosphere_air_water~vapor__relative_saturation',
+    'DLWRF': 'land_surface_radiation~incoming~longwave__energy_flux',
+    'DSWRF': 'land_surface_radiation~incoming~shortwave__energy_flux',
+    'PRES': 'land_surface_air__pressure',
+    'U': 'land_surface_wind__x_component_of_velocity',
+    'V': 'land_surface_wind__y_component_of_velocity',
     # ----------- Static inputs -----------
     'aridity': 'ratio__mean_potential_evapotranspiration__mean_precipitation',
     'meanP': 'atmosphere_water__daily_mean_of_liquid_equivalent_precipitation_rate',
@@ -306,7 +317,9 @@ class MtsDeltaModelBmi(Bmi):
         self._model = self._load_model()
 
         # --- Buffer initialization ---
-        n_vars = self.get_input_item_count()
+        n_vars = len(
+            self.model_config['model']['nn']['hif_model']['forcings'],
+        )  # self.get_input_item_count()
 
         # Offset so daily and hourly buffers don't overlap.
         self.b_offset = self.req_hourly_history // 24
@@ -595,7 +608,19 @@ class MtsDeltaModelBmi(Bmi):
         var_x_list = self.model_config['model']['nn']['hif_model']['forcings']
         hourly_forcing = []
         for var in var_x_list:
-            val = self._dynamic_var[map_to_external(var)]['value']  # [time, space]
+            if var == 'PET':
+                # Calculate PET on-the-fly (would be nice to do in parallel)
+                val = penman_monteith_pet(
+                    temp=self._dynamic_var[map_to_external('T')]['value'],
+                    spfh=self._dynamic_var[map_to_external('SPFH')]['value'],
+                    dlwrf=self._dynamic_var[map_to_external('DLWRF')]['value'],
+                    dswrf=self._dynamic_var[map_to_external('DSWRF')]['value'],
+                    pres=self._dynamic_var[map_to_external('PRES')]['value'],
+                    ugrd_10m=self._dynamic_var[map_to_external('U')]['value'],
+                    vgrd_10m=self._dynamic_var[map_to_external('V')]['value'],
+                )
+            else:
+                val = self._dynamic_var[map_to_external(var)]['value']  # [time, space]
             hourly_forcing.append(val)
 
         return np.stack(hourly_forcing, axis=-1)  # [time, space, vars]
@@ -854,13 +879,6 @@ class MtsDeltaModelBmi(Bmi):
         except ValueError as e:
             raise ValueError("Normalization statistics not found.") from e
 
-    def _to_internal_units(self, name: str, values: list[float]) -> list[float]:
-        """Convert external units to internal model units."""
-        if name == 'land_surface_air__temperature':
-            # degK to degC
-            return [v - 273.15 for v in values]
-        return values
-
     def _to_external_units(self, name: str, values: list[float]) -> list[float]:
         """Convert internal model units to external units."""
         if name == 'atmosphere_water__liquid_equivalent_precipitation_rate':
@@ -1085,7 +1103,6 @@ class MtsDeltaModelBmi(Bmi):
             src = np.array([src])
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if name in dict.keys():
-                src = self._to_internal_units(name, src)
                 dict[name]['value'] = np.expand_dims(
                     np.array(src),
                     axis=1,
@@ -1104,7 +1121,6 @@ class MtsDeltaModelBmi(Bmi):
 
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if name in dict.keys():
-                src = self._to_internal_units(name, src)
                 for i in inds:
                     dict[name]['value'][i] = src[i]
                 break

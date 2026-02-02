@@ -6,9 +6,10 @@ simulations with the Distributed Differentiable Routing (DDR) package.
 See ./docs/6-routing.md for more information on routing with DDR.
 """
 
-import pandas as pd
 import os
 from pathlib import Path
+
+import pandas as pd
 
 # Setup pathing
 pkg_root = Path(__file__).parent

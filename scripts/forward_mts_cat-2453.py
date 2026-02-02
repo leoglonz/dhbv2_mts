@@ -29,11 +29,9 @@ logging.basicConfig(level=logging.INFO)
 ### Configuration Settings (single-catchment) ###
 CAT_ID = 'cat-2453'  # Options: cat-2453, cat-2454, cat-2455
 BMI_CONFIG_PATH = './ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml'
-FORCING_PATH = (
-    './ngen_resources/data/forcing/camels_2008-01-09 00_00_00_2010-12-30 23_00_00.nc'
-)
+FORCING_PATH = './ngen_resources/data/forcing/camels_subset_2008-01-09 00_00_00_2010-12-30 23_00_00.nc'
 SAVE_OUTPUT = True
-SAVE_PATH = f'./output/dhbv_2_mts_{CAT_ID}_runoff.npy'
+SAVE_PATH = f'./output/dhbv_2_mts_{CAT_ID}_runoff_pen-monteith.npy'
 ### ----------------------------------------- ###
 
 
@@ -59,9 +57,14 @@ forcings = ds.sel(ids=CAT_ID)
 t_steps = len(forcings['time'])
 
 # Maintain strict typing of forcing arrays
-precip = forcings['precip_rate[mm h-1]'].values.astype(np.float64)
+precip = forcings['precip_rate'].values.astype(np.float64)  # precip_rate[mm h-1]
 temp = forcings['TMP_2maboveground'].values.astype(np.float64)
-pet = forcings['PET_hargreaves'].values.astype(np.float64)
+spfh = forcings['SPFH_2maboveground'].values.astype(np.float64)
+dlwrf = forcings['DLWRF_surface'].values.astype(np.float64)
+dswrf = forcings['DSWRF_surface'].values.astype(np.float64)
+pres = forcings['PRES_surface'].values.astype(np.float64)
+ugrd_10m = forcings['UGRD_10maboveground'].values.astype(np.float64)
+vgrd_10m = forcings['VGRD_10maboveground'].values.astype(np.float64)
 
 
 runoff_sim = []
@@ -84,8 +87,28 @@ for t in range(t_steps):
         temp[t],
     )
     model.set_value(
-        'water_potential_evaporation_flux',
-        pet[t],
+        'atmosphere_air_water~vapor__relative_saturation',
+        spfh[t],
+    )
+    model.set_value(
+        'land_surface_radiation~incoming~longwave__energy_flux',
+        dlwrf[t],
+    )
+    model.set_value(
+        'land_surface_radiation~incoming~shortwave__energy_flux',
+        dswrf[t],
+    )
+    model.set_value(
+        'land_surface_air__pressure',
+        pres[t],
+    )
+    model.set_value(
+        'land_surface_wind__x_component_of_velocity',
+        ugrd_10m[t],
+    )
+    model.set_value(
+        'land_surface_wind__y_component_of_velocity',
+        vgrd_10m[t],
     )
 
     ### BMI update ###

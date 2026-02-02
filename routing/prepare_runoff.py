@@ -2,12 +2,11 @@ import os
 import re
 from pathlib import Path
 
+import icechunk
+import numpy as np
 import pandas as pd
 import xarray as xr
-import numpy as np
-import icechunk
 from icechunk.xarray import to_icechunk
-
 
 # Setup pathing
 root = Path(__file__).parent

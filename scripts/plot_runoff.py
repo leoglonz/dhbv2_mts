@@ -16,7 +16,7 @@ import pandas as pd
 import torch
 
 # Assuming these are available in your environment
-from dmg.core import timestep_resample, format_resample_interval
+from dmg.core import format_resample_interval, timestep_resample
 from numpy.typing import NDArray
 
 # Setup pathing

@@ -6,9 +6,10 @@ TODO: This script should support adding catchments attributes for any catchment
 in the CONUS HF.
 """
 
+from pathlib import Path
+
 import xarray as xr
 from ruamel.yaml import YAML
-from pathlib import Path
 
 # Setup pathing
 pkg_root = Path(__file__).parent.parent.parent
