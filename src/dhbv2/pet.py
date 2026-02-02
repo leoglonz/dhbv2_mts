@@ -1,7 +1,6 @@
-import math
-
 import numpy as np
 import pandas as pd
+from typing import Optional
 
 
 def hargreaves_pet(
@@ -123,88 +122,85 @@ def calc_hourly_hargreaves_pet(
     return pet_hourly
 
 
-def hourly_pet_penman_monteith(
-    temp,
-    spfh,
-    dswrf,
-    dlwrf,
-    pressure,
-    ugrd_10m,
-    vgrd_10m,
-    albedo=0.23,
-):
+def penman_monteith_pet(
+    temp: np.ndarray,
+    spfh: np.ndarray,
+    dlwrf: np.ndarray,
+    dswrf: np.ndarray,
+    pres: np.ndarray,
+    ugrd_10m: np.ndarray,
+    vgrd_10m: np.ndarray,
+    albedo: Optional[float] = 0.23,
+) -> np.ndarray:
     """
-    Computes hourly PET (mm/hour) using the FAO Penman-Monteith formulation.
+    Compute hourly PET (mm/hr) using FAO-56 Penman-Monteith.
+
+    Reference: https://www.fao.org/4/x0490e/x0490e06.htm
+
+    Note: This formulation assumes (and converts) AORC inputs
+        https://registry.opendata.aws/noaa-nws-aorc/
 
     Parameters
     ----------
     temp
-        Air temperature in Kelvin.
+        Air temperature in Celsius.
     spfh
-        Specific humidity (kg/kg or g/g depending on AORC version).
+        Specific humidity (g/g).
     dswrf
-        Downward shortwave radiation in W/m².
+        Downward shortwave radiation in W/m2.
     dlwrf
-        Downward longwave radiation in W/m².
-    pressure
-        Atmospheric pressure in Pascals.
+        Downward longwave radiation in W/m2.
+    pres
+        Atmospheric pressure in kPa.
     ugrd_10m
         U-component of wind at 10 meters in m/s.
     vgrd_10m
         V-component of wind at 10 meters in m/s.
     albedo
-        Surface albedo (default is 0.23 for grass).
+        Surface albedo (default 0.23 is for grass reference crop).
+
+    Returns
+    -------
+    ndarray
+        Potential evapotranspiration in mm/hr.
     """
-    # --- Temperature (C) ---
-    T = temp - 273.15
+    # Convert specific humidity (AORC in g/g) ---
+    q = np.where(spfh > 0.02, spfh / 1000.0, spfh)
 
-    # --- Convert specific humidity (AORC sometimes in g/g) ---
-    if spfh > 0.02:  # crude check: g/g range is like 0–20 g/kg
-        q = spfh / 1000.0
-    else:
-        q = spfh
+    # Wind speed: convert AORC 10m to ~2m ---
+    u10 = np.sqrt(ugrd_10m**2 + vgrd_10m**2)
+    u2 = u10 * 4.87 / np.log(67.8 * 10 - 5.42)
 
-    # --- Wind speed at 10 m and convert to 2 m (FAO) ---
-    u10 = math.sqrt(ugrd_10m**2 + vgrd_10m**2)
-    u2 = u10 * 4.87 / math.log(67.8 * 10 - 5.42)
+    # Psychrometric constant (kPa/degC) ---
+    gamma = 0.000665 * pres
 
-    # --- Atmospheric pressure (kPa) ---
-    P_kPa = pressure / 1000.0
+    # Saturation vapor pressure (kPa) ---
+    es = 0.6108 * np.exp((17.27 * temp) / (temp + 237.3))
 
-    # --- Psychrometric constant (kPa/°C) ---
-    gamma = 0.000665 * P_kPa
+    # Actual vapor pressure (kPa) ---
+    ea = (q * pres) / (0.622 + 0.378 * q)
 
-    # --- Saturation vapor pressure (kPa) ---
-    es = 0.6108 * math.exp((17.27 * T) / (T + 237.3))
+    # Slope of saturation vapor pressure curve (kPa/degC) ---
+    delta = (4098 * es) / (temp + 237.3) ** 2
 
-    # --- Actual vapor pressure (kPa) ---
-    # e = q * P / (0.622 + 0.378 q)
-    ea = (q * P_kPa) / (0.622 + 0.378 * q)
-
-    # --- Slope of saturation vapor pressure curve (kPa/°C) ---
-    delta = (4098 * es) / (T + 237.3) ** 2
-
-    # --- Net radiation ---
-    # Convert downward radiation to MJ/m2/hr
+    # Convert srad to MJ/m2/hr ---
     Rs = dswrf * 0.0036  # shortwave (incoming)
     Rl_down = dlwrf * 0.0036  # longwave (downwelling)
 
-    # Estimate upwelling longwave using Stefan–Boltzmann
-    sigma = 4.903e-9  # MJ/K4/m2/day   (FAO56 units)
-    # Convert sigma for hourly: divide by 24
-    sigma_hr = sigma / 24.0
+    # Estimate upwelling longwave w/ Stefan–Boltzmann
+    sigma = 4.903e-9 / 24.0  # MJ/K4/m2/hr
 
-    Rl_up = sigma_hr * (temp**4)  # VERY approximate without emissivity
+    Rl_up = sigma * (temp**4)  # approximation w/o emissivity
 
     Rn = (1 - albedo) * Rs + (Rl_down - Rl_up)
 
-    # --- Soil heat flux G (FAO: zero for hourly) ---
-    G = 0
+    # Soil heat flux G and drag coefficient ---
+    G = np.where(Rn > 0, 0.1 * Rn, 0.5 * Rn)
+    cd = np.where(Rn > 0, 0.34, 0.96)
 
-    # --- Penman–Monteith FAO-56 equation for hourly ET (mm/hr) ---
-    ET = (
-        0.408 * delta * (Rn - G) + gamma * (900.0 / (T + 273.15)) * u2 * (es - ea)
-    ) / (delta + gamma * (1 + 0.34 * u2))
+    # Penman–Monteith FAO-56 hourly PET (mm/hr) ---
+    num = 0.408 * delta * (Rn - G) + gamma * (37.0 / (temp + 273.15)) * u2 * (es - ea)
+    denom = delta + gamma * (1 + cd * u2)
+    pet = num / denom
 
-    # ensure non-negative
-    return max(0.0, ET)
+    return np.maximum(pet, 0.0)

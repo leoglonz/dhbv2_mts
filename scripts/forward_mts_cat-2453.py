@@ -29,11 +29,9 @@ logging.basicConfig(level=logging.INFO)
 ### Configuration Settings (single-catchment) ###
 CAT_ID = 'cat-2453'  # Options: cat-2453, cat-2454, cat-2455
 BMI_CONFIG_PATH = './ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml'
-FORCING_PATH = (
-    './ngen_resources/data/forcing/camels_2008-01-09 00_00_00_2010-12-30 23_00_00.nc'
-)
+FORCING_PATH = './ngen_resources/data/forcing/camels_subset_2008-01-09 00_00_00_2010-12-30 23_00_00.nc'
 SAVE_OUTPUT = True
-SAVE_PATH = f'./output/dhbv_2_mts_{CAT_ID}_runoff.npy'
+SAVE_PATH = f'./output/dhbv_2_mts_{CAT_ID}_runoff_pen-monteith.npy'
 ### ----------------------------------------- ###
 
 
@@ -61,7 +59,6 @@ t_steps = len(forcings['time'])
 # Maintain strict typing of forcing arrays
 precip = forcings['precip_rate[mm h-1]'].values.astype(np.float64)
 temp = forcings['TMP_2maboveground'].values.astype(np.float64)
-pet = forcings['PET_hargreaves'].values.astype(np.float64)
 
 
 runoff_sim = []
@@ -83,10 +80,10 @@ for t in range(t_steps):
         'land_surface_air__temperature',
         temp[t],
     )
-    model.set_value(
-        'water_potential_evaporation_flux',
-        pet[t],
-    )
+    # model.set_value(
+    #     'water_potential_evaporation_flux',
+    #     pet[t],
+    # )
 
     ### BMI update ###
     if t == 0:
