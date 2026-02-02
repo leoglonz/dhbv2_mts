@@ -133,7 +133,8 @@ def penman_monteith_pet(
     albedo: Optional[float] = 0.23,
 ) -> np.ndarray:
     """
-    Compute hourly PET (mm/hr) using FAO-56 Penman-Monteith.
+    Calculate hourly potential evapotranspiration (PET; mm hr-1) using the FAO-56
+    Penman-Monteith method.
 
     Reference: https://www.fao.org/4/x0490e/x0490e06.htm
 
@@ -145,24 +146,24 @@ def penman_monteith_pet(
     temp
         Air temperature in Celsius.
     spfh
-        Specific humidity (g/g).
+        Specific humidity (g g-1).
     dswrf
-        Downward shortwave radiation in W/m2.
+        Downward shortwave radiation in W m-2.
     dlwrf
-        Downward longwave radiation in W/m2.
+        Downward longwave radiation in W m-2.
     pres
         Atmospheric pressure in kPa.
     ugrd_10m
-        U-component of wind at 10 meters in m/s.
+        U-component of wind at 10 meters in m s-1.
     vgrd_10m
-        V-component of wind at 10 meters in m/s.
+        V-component of wind at 10 meters in m s-1.
     albedo
         Surface albedo (default 0.23 is for grass reference crop).
 
     Returns
     -------
     ndarray
-        Potential evapotranspiration in mm/hr.
+        Potential evapotranspiration in mm hr-1.
     """
     # Convert specific humidity (AORC in g/g) ---
     q = np.where(spfh > 0.02, spfh / 1000.0, spfh)

@@ -317,7 +317,9 @@ class MtsDeltaModelBmi(Bmi):
         self._model = self._load_model()
 
         # --- Buffer initialization ---
-        n_vars = self.get_input_item_count()
+        n_vars = len(
+            self.model_config['model']['nn']['hif_model']['forcings'],
+        )  # self.get_input_item_count()
 
         # Offset so daily and hourly buffers don't overlap.
         self.b_offset = self.req_hourly_history // 24
@@ -609,13 +611,13 @@ class MtsDeltaModelBmi(Bmi):
             if var == 'PET':
                 # Calculate PET on-the-fly (would be nice to do in parallel)
                 val = penman_monteith_pet(
-                    temp=self._dynamic_var['T']['value'],
-                    spfh=self._dynamic_var['SPFH']['value'],
-                    dlwrf=self._dynamic_var['DLWRF']['value'],
-                    dswrf=self._dynamic_var['DSWRF']['value'],
-                    pressure=self._dynamic_var['PRES']['value'],
-                    ugrd_10m=self._dynamic_var['U']['value'],
-                    vgrd_10m=self._dynamic_var['V']['value'],
+                    temp=self._dynamic_var[map_to_external('T')]['value'],
+                    spfh=self._dynamic_var[map_to_external('SPFH')]['value'],
+                    dlwrf=self._dynamic_var[map_to_external('DLWRF')]['value'],
+                    dswrf=self._dynamic_var[map_to_external('DSWRF')]['value'],
+                    pres=self._dynamic_var[map_to_external('PRES')]['value'],
+                    ugrd_10m=self._dynamic_var[map_to_external('U')]['value'],
+                    vgrd_10m=self._dynamic_var[map_to_external('V')]['value'],
                 )
             else:
                 val = self._dynamic_var[map_to_external(var)]['value']  # [time, space]
