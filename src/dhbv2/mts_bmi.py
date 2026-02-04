@@ -881,7 +881,7 @@ class MtsDeltaModelBmi(Bmi):
 
     def _to_external_units(self, name: str, values: list[float]) -> list[float]:
         """Convert internal model units to external units."""
-        if name == 'atmosphere_water__liquid_equivalent_precipitation_rate':
+        if name == 'land_surface_water__runoff_volume_flux':
             # # mm h-1 --> m3 s-1 (depth to volumetric rate)
             # area = self._static_var[map_to_external('catchment__area')]['value']
             # return [v * 1000 / 3600 * area for v in values]
