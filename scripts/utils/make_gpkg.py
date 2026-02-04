@@ -14,9 +14,10 @@ layers.
 @leoglonz
 """
 
-import geopandas as gpd
-from pathlib import Path
 import sqlite3
+from pathlib import Path
+
+import geopandas as gpd
 
 # Setup pathing
 pkg_root = Path(__file__).parent.parent.parent

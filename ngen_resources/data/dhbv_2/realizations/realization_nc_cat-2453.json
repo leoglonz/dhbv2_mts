@@ -12,24 +12,28 @@
           "fixed_time_step": true,
           "uses_forcing_file": false,
           "variables_names_map" : {
-            "atmosphere_water__liquid_equivalent_precipitation_rate":"precip_rate",
+            "atmosphere_water__liquid_equivalent_precipitation_rate":"precip_rate[mm h-1]",
             "land_surface_air__temperature":"TMP_2maboveground",
-            "water_potential_evaporation_flux":"PET_hargreaves",
+            "atmosphere_air_water~vapor__relative_saturation":"SPFH_2maboveground",
+            "land_surface_radiation~incoming~longwave__energy_flux":"DLWRF_surface",
+            "land_surface_radiation~incoming~shortwave__energy_flux":"DSWRF_surface",
+            "land_surface_air__pressure":"PRES_surface",
+            "land_surface_wind__x_component_of_velocity":"UGRD_10maboveground",
+            "land_surface_wind__y_component_of_velocity":"VGRD_10maboveground",
             "land_surface_water__runoff_volume_flux":"streamflow_cms"
           }
         }
       }
     ],
     "forcing": {
-      "file_pattern": ".*{{id}}.*.csv",
-      "path": "./data/forcing/camels",
-      "provider": "CsvPerFeature"
+      "path": "./data/forcing/camels_subset_2008-01-09 00_00_00_2010-12-30 23_00_00.nc",
+      "provider": "NetCDF"
     }
   },
   "time": {
     "start_time": "2008-01-09 00:00:00",
-    "end_time": "2010-12-30 23:00:00",
+    "end_time": "2009-01-30 23:00:00",
     "output_interval": 3600
   },
-  "output_root": "./data/output/"
+  "output_root": "./output/"
 }

@@ -4,9 +4,9 @@
       {
         "name": "bmi_python",
         "params": {
-          "python_type": "dhbv2.mts_bmi.MtsDeltaModelBmi",
-          "model_type_name": "dhbv2.0 mts",
-          "init_config": "./data/dhbv_2_mts/config/bmi_cat-2453.yaml",
+          "python_type": "dhbv2.bmi.DeltaModelBmi",
+          "model_type_name": "dhbv2.0",
+          "init_config": "./data/dhbv_2/config/bmi_cat-2453.yaml",
           "allow_exceed_end_time": true,
           "main_output_variable": "land_surface_water__runoff_volume_flux",
           "fixed_time_step": true,
@@ -37,7 +37,7 @@
     "output_interval": 3600
   },
   "routing":{
-    "t_route_config_file_with_path": "./data/dhbv_2_mts/config/routing_config.yaml"
+    "t_route_config_file_with_path": "./data/dhbv_2/config/routing_config.yaml"
   },
   "output_root": "./output/"
 }

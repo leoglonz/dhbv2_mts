@@ -1,4 +1,4 @@
-### Single-catchment configuration ###
+### Single-catchment configuration for δHBV2.0 Daily ###
 catchment_id: 'cat-2453'
 
 # Catchment attributes
@@ -31,7 +31,6 @@ T_silt: 11.0
 Porosity: 0.2085456259801661
 uparea: 7.7805003825041545
 catchsize: 7.7805003825041545
-lengthkm: 2.147179500288239
 
 # BMI configuration
 model_dir: ./data/dhbv_2/model/dhbv_2/
@@ -39,4 +38,4 @@ dtype: float32
 
 verbose: false
 
-time_step: 1 hour
+time_step: 1 day
