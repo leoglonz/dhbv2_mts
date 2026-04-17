@@ -817,8 +817,6 @@ class DeltaModelBmi(Bmi):
             if outputs is None:
                 log.error("No outputs to format. Check model predictions.")
                 output_val = np.zeros(1)
-            elif not isinstance(outputs[internal_name], np.ndarray):
-                output_val = outputs[internal_name].detach().cpu().numpy()
             else:
                 output_val = outputs[internal_name]
 
@@ -1089,8 +1087,8 @@ class DeltaModelBmi(Bmi):
 
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if name in dict.keys():
-                for i in inds:
-                    dict[name]['value'][i] = src[i]
+                for j, i in enumerate(inds):
+                    dict[name]['value'][i] = src[j]
                 break
 
     def get_grid_rank(self, grid):

@@ -809,7 +809,7 @@ class MtsDeltaModelBmi(Bmi):
         with torch.no_grad():
             prediction = self._model.dpl_model(data_dict, batched=batched)
             output = {
-                'streamflow': prediction['Qs'].detach().cpu().numpy(),
+                'streamflow': prediction['Qs'][:, :, 0].detach().cpu().numpy(),
             }
         return output
 
@@ -858,8 +858,6 @@ class MtsDeltaModelBmi(Bmi):
             if outputs is None:
                 log.error("No outputs to format. Check model predictions.")
                 output_val = np.zeros(1)
-            elif not isinstance(outputs[internal_name], np.ndarray):
-                output_val = outputs[internal_name].detach().cpu().numpy()
             else:
                 output_val = outputs[internal_name]
 
@@ -1125,8 +1123,8 @@ class MtsDeltaModelBmi(Bmi):
 
         for dict in [self._dynamic_var, self._static_var, self._output_vars]:
             if name in dict.keys():
-                for i in inds:
-                    dict[name]['value'][i] = src[i]
+                for j, i in enumerate(inds):
+                    dict[name]['value'][i] = src[j]
                 break
 
     def get_grid_rank(self, grid):

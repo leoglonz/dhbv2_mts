@@ -198,7 +198,7 @@ def penman_monteith_pet(
 
     # Soil heat flux G and drag coefficient ---
     G = np.where(Rn > 0, 0.1 * Rn, 0.5 * Rn)
-    cd = np.where(Rn > 0, 0.34, 0.96)
+    cd = np.where(Rn > 0, 0.24, 0.96)
 
     # Penman–Monteith FAO-56 hourly PET (mm/hr) ---
     num = 0.408 * delta * (Rn - G) + gamma * (37.0 / (temp + 273.15)) * u2 * (es - ea)
