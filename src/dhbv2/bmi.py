@@ -40,7 +40,7 @@ _dynamic_input_vars = [
     ('atmosphere_air_water~vapor__relative_saturation', 'g g-1'),
     ('land_surface_radiation~incoming~longwave__energy_flux', 'W m-2'),
     ('land_surface_radiation~incoming~shortwave__energy_flux', 'W m-2'),
-    ('land_surface_air__pressure', 'kPa'),
+    ('land_surface_air__pressure', 'Pa'),
     ('land_surface_wind__x_component_of_velocity', 'm s-1'),
     ('land_surface_wind__y_component_of_velocity', 'm s-1'),
 ]
