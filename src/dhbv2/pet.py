@@ -128,7 +128,7 @@ def penman_monteith_pet(
     spfh: np.ndarray,
     dlwrf: np.ndarray,
     dswrf: np.ndarray,
-    pressure: np.ndarray,
+    pres: np.ndarray,
     ugrd_10m: np.ndarray,
     vgrd_10m: np.ndarray,
     albedo: Optional[float] = 0.23,
@@ -159,7 +159,7 @@ def penman_monteith_pet(
         Downward longwave radiation [W m-2].
     dswrf
         Downward shortwave radiation [W m-2].
-    pressure
+    pres
         Atmospheric pressure [Pa].
     ugrd_10m
         U-component of wind at 10 meters [m s-1].
@@ -175,8 +175,11 @@ def penman_monteith_pet(
     ndarray
         Potential evapotranspiration [mm hr-1].
     """
+    # Auto-detect AORC spfh (g/g * 1000) and convert to fraction
+    spfh = np.where(spfh > 0.02, spfh / 1000.0, spfh)
+
     # Convert pressure to kPa
-    pressure = pressure / 1000.0
+    pressure = pres / 1000.0
 
     # Convert wind speed at 10m elevation (AORC) to 2m
     u10 = np.sqrt(ugrd_10m**2 + vgrd_10m**2)
