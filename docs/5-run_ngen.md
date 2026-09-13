@@ -156,8 +156,8 @@ cd ./ngen
 
 # Geopackage
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg 'cat-2453' \
-    data/geo/camels_subset_hf2.gpkg 'nex-2454' \
+    data/geo/camels_subset_hf2_2.gpkg 'cat-2453' \
+    data/geo/camels_subset_hf2_2.gpkg 'nex-2454' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 
 # Or with Docker
@@ -167,8 +167,8 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg 'cat-2453' \
-    data/geo/camels_subset_hf2.gpkg 'nex-2454' \
+    data/geo/camels_subset_hf2_2.gpkg 'cat-2453' \
+    data/geo/camels_subset_hf2_2.gpkg 'nex-2454' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 ```
 
@@ -186,8 +186,8 @@ To run all catchments defined in the geopackage/geojson (3 in our example), leav
 cd ./ngen
 
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 
 # Or with Docker
@@ -197,8 +197,8 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 ```
 
@@ -208,8 +208,8 @@ Realizations can accomodate catchment-specific formulations in addition to the "
 cd ./ngen
 
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_multi_cat-2453.json
 
 # Or with Docker
@@ -219,8 +219,8 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_multi_cat-2453.json
 ```
 

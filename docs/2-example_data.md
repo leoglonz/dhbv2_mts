@@ -32,7 +32,7 @@ Example data is as follows:
   - Stored in BMI configs `./ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml`. *BMI will later support direct reading from a remotely hosted HydroFabric geopackage with attributes for all 800k catchments.*
 
 - Geopackage:
-  - `./ngen_resources/data/geo/camels_subset_hf2.gpkg`
+  - `./ngen_resources/data/geo/camels_subset_hf2_2.gpkg`
 
 <br/>
 
@@ -86,5 +86,5 @@ dhbv2/
         │   └── cat-2453_2008...csv
         │
         └── geo/          # GeoJSON/Geopackage HydroFabric data
-            └── camels_subset_hf2.gpkg
+            └── camels_subset_hf2_2.gpkg
 ```

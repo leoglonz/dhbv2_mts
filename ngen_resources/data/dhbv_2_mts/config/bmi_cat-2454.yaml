@@ -1,7 +1,8 @@
 ### Single-catchment configuration ###
-catchment_id: 'cat-2454'
+catchment_id: cat-2454
+catchment_name: cat-2454
 
-# Catchment attributes
+# Static catchment attributes
 aridity: 0.6160151582560454
 meanP: 1206.0025068241089
 ETPOT_Hargr: 742.5628573033431
@@ -37,7 +38,10 @@ lengthkm: 6.527005307025407
 model_dir: ./data/dhbv_2_mts/model/dhbv_2_mts/
 dtype: float32
 verbose: false
-time_step: 1 hour
+
+# PET calculation method: 'penman_monteith' (default) or 'hargreaves'
+pet_method: penman_monteith
+latitude: 45.403774771022356
 
 warmup:
   # Daily->hourly handoff cadence (how long the hourly model runs per before

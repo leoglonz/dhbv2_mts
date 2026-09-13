@@ -205,7 +205,7 @@ Keys are CSDMS standard names the BMI exposes; values are the column headers in 
 
 | CSDMS standard name | Mapped to | Units |
 | --- | --- | --- |
-| `land_surface_water__runoff_volume_flux` | `streamflow_cms` | m h-1 |
+| `land_surface_water__runoff_volume_flux` | `streamflow` | m h-1 |
 
 > Two unit notes worth internalizing:
 >
