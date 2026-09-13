@@ -63,12 +63,12 @@ docker run -it --rm localbuild/ngen:latest /bin/bash
 To cleanup old Docker images/containers:
 
 ```bash
-docker rm `docker ps --no-trunc -aq`
-docker images -q --filter "dangling=true" | xargs docker rmi
+docker system prune -f
 
 # or
 
-docker system prune -f
+docker rm `docker ps --no-trunc -aq`
+docker images -q --filter "dangling=true" | xargs docker rmi
 ```
 
 </br>
