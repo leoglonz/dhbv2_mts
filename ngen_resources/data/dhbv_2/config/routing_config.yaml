@@ -10,7 +10,7 @@ network_topology_parameters:
   supernetwork_parameters:
     #----------
     network_type: HYFeaturesNetwork
-    geo_file_path: ./data/geo/camels_subset_hf2.gpkg
+    geo_file_path: ./data/geo/camels_subset_hf2_2.gpkg
 
     columns:
       key: 'id'

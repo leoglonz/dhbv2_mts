@@ -39,8 +39,8 @@ With an updated realization and routing config, runoff simulation and routing ca
 cd ./ngen
 
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_routing_cat-2453.json
 
 # Or with Docker
@@ -50,8 +50,8 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_troute_cat-2453.json
 ```
 

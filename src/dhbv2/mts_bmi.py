@@ -1223,6 +1223,7 @@ class MtsDeltaModelBmi(Bmi):
         # Convert date ranges to integer values.
         rho = config['model']['rho']
 
+        # TODO: Remove (unused)
         sim_time = Dates(config['sim'], rho)
         config['sim_time'] = [sim_time.start_time, sim_time.end_time]
 
