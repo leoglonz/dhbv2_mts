@@ -40,21 +40,26 @@ compute_parameters:
   compute_kernel: V02-structured
   assume_short_ts: True
   subnetwork_target_size: 10000
-  cpu_pool: 36
+  cpu_pool: 8  # raise to match your core count for larger networks
 
   restart_parameters:
     #----------
-    start_datetime: 2009-01-09 00:00:00
+    # Routing begins where the model starts producing flow, not where ngen
+    # starts: the first 8760 hours of a dHBV2.0 MTS run are spin-up and emit
+    # zero runoff. Routing them wastes time and dilutes any check on the
+    # result. 2008-01-09 00:00 + 8760 h = 2009-01-08 00:00.
+    start_datetime: 2009-01-08 00:00:00
   forcing_parameters:
     #----------
     # Ngen's timestep divided by t-route's (e.g. 3600/300)
     qts_subdivisions: 12
     # T-route's internal timestep in seconds
     dt: 300 # [sec]
-    # Total simulation t-route timesteps (e.g. 12 per hour, 288 per day) So if sim is 10 days, nts=288*10
-    nts: 6336.0
+    # Total t-route timesteps = routed hours x qts_subdivisions.
+    # Here the full post-spin-up period: (26088 - 8760) x 12 = 207936.
+    nts: 207936.0
     # Number of external (ngen) timesteps (NOTE: must change if time period changes)
-    max_loop_size: 9312.0 # [hr]
+    max_loop_size: 26088.0 # [hr]
     # The location to find the nex-* CSV files
     qlat_input_folder: ./output/
     nexus_input_folder: ./output/
@@ -90,6 +95,9 @@ output_parameters:
   #----------
   stream_output:
     stream_output_directory: ./output/stream_output/
-    stream_output_time: 1 #[hr]
+    # Hours of routed flow per output file. -1 writes the whole run to a
+    # single file -- with 17328 routed hours, the default of 1 would emit
+    # 17328 NetCDFs.
+    stream_output_time: -1
     stream_output_type: '.nc' #please select only between netcdf '.nc' or '.csv' or '.pkl'
     stream_output_internal_frequency: 60 #[min] it should be order of 5 minutes. For instance if you want to output every hour put 60

@@ -2,7 +2,7 @@
 
 After obtaining runoff simulations from δHBV 2.0, there are a few options for routing flow through the river network.
 
-The network can be defined in several ways, with [MERIT-hydro](https://www.reachhydro.org/home/params/merit-basins) and the [NextGen HydroFabric](https://github.com/NOAA-OWP/hydrofabric) being notable examples. In the context of NextGen (ngen), we demonstrate routing on the HydroFabric v2.2 (download [v2.2 source](https://www.lynker-spatial.com) or [AWI-patched v2.2](https://github.com/CIROH-UA/community_hf_patcher/tree/main)) river network with ~4km resolution.
+The network can be defined in several ways, with [MERIT-hydro](https://www.reachhydro.org/home/params/merit-basins) and the [NextGen Hydrofabric](https://github.com/NOAA-OWP/hydrofabric) being notable examples. In the context of NextGen (ngen), we demonstrate routing on the Hydrofabric v2.2 (download [v2.2 source](https://www.lynker-spatial.com) or [AWI-patched v2.2](https://github.com/CIROH-UA/community_hf_patcher/tree/main)) river network with ~4km resolution.
 
 <br/>
 
@@ -56,6 +56,8 @@ docker run --rm \
 ```
 
 Outputs will save by default to `./ngen/output/stream_output`.
+
+Note that `nts`, `max_loop_size`, and `start_datetime` in the routing config are pinned to the realization's time window and must be updated alongside it, and that `stream_output_time` is *hours per output file* — the default emits one NetCDF per routed hour. The shipped config routes the full post-spin-up period (17,328 hours) into a single file. [8-validation](./8-validation.md#leg-3--t-route) covers how these relate, and provides a routed check that verifies volume conservation through this path.
 
 In addition to running in NextGen, T-Route can be deployed standalone and comes with a few examples to demonstrate:
 

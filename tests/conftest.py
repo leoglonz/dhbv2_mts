@@ -1,7 +1,15 @@
 """Shared fixtures for dhbv2 BMI tests."""
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
+
+# pyproject sets --import-mode=importlib, which does not put the rootdir of a
+# test file on sys.path. Add it so test modules can import the `validation`
+# helper module that sits beside them.
+sys.path.insert(0, str(Path(__file__).parent))
 
 from dhbv2.bmi import DeltaModelBmi
 from dhbv2.mts_bmi import MtsDeltaModelBmi

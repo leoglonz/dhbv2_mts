@@ -5,10 +5,11 @@ operating behavior.
 We use catchment `cat-2453` (2454 and 2455 also available) on the CAMELS
 dataset as an example, with forcing timeseries available from 2008 to 2011.
 
-NOTE: The original MTS model requires 1yr (358 days) of spinup data prior to
-simulation start. Therefore, this script will provide simulations starting from
-2009-01-01 using this mode. However, if you wish to run the model without spinup,
-set the following in the BMI config:
+NOTE: The MTS model spins up before it emits flow: it needs `daily_warmup_days`
+(351) days of daily history plus `hourly_warmup_hours` of hourly history before
+the first warmup can run, so the leading steps of the series are zero. With the
+shipped `bmi_cat-2453.yaml` the first non-zero runoff lands at step 8760
+(2009-01-08 00:00). To run without spinup instead, set in the BMI config:
 
     warmup:
       cycle_days: 0
@@ -39,7 +40,11 @@ CAT_ID = 'cat-2453'  # Options: cat-2453, cat-2454, cat-2455
 BMI_CONFIG_PATH = f'./ngen_resources/data/dhbv_2_mts/config/bmi_{CAT_ID}.yaml'
 FORCING_PATH = './ngen_resources/data/forcing/camels_subset_2008-01-09 00_00_00_2010-12-30 23_00_00.nc'
 SAVE_OUTPUT = True
-SAVE_PATH = f'./output/dhbv_2_mts_{CAT_ID}_runoff.npy'
+# Override with DHBV2_MTS_OUTPUT to direct the run at a validation artifact.
+SAVE_PATH = os.environ.get(
+    'DHBV2_MTS_OUTPUT',
+    f'./output/dhbv_2_mts_{CAT_ID}_runoff.npy',
+)
 ### ----------------------------------------- ###
 
 
@@ -64,13 +69,26 @@ ds = xr.open_dataset(forcing_path).set_coords('ids').swap_dims({'catchment-id': 
 forcings = ds.sel(ids=CAT_ID)
 t_steps = len(forcings['time'])
 
+# Convert the raw forcing file's units to the units each BMI input variable
+# declares via get_var_units(). Inside NextGen this step is done for you: ngen
+# reads the NetCDF `units` attribute, compares it to the BMI's declared units,
+# and converts with udunits. Standalone there is no such layer, so the
+# conversions below MUST mirror what ngen would do or the two paths diverge.
+#
+#   file variable        file units   BMI declares   conversion
+#   precip_rate          mm s^-1      mm h-1         x 3600
+#   TMP_2maboveground    K            degC           - 273.15
+#   PRES_surface         Pa           Pa             none
+#   SPFH_2maboveground   kg/kg        g g-1          none (numerically equal)
+#   D[LS]WRF_surface     W/m^2        W m-2          none
+#   [UV]GRD_10mabove...  m/s          m s-1          none
 # Maintain strict typing of forcing arrays
 precip = forcings['precip_rate'].values.astype(np.float64) * 3600.0  # mm/s to mm/hr
-temp = forcings['TMP_2maboveground'].values.astype(np.float64)  # degC
+temp = forcings['TMP_2maboveground'].values.astype(np.float64) - 273.15  # K to degC
 spfh = forcings['SPFH_2maboveground'].values.astype(np.float64)
 dlwrf = forcings['DLWRF_surface'].values.astype(np.float64)
 dswrf = forcings['DSWRF_surface'].values.astype(np.float64)
-pres = forcings['PRES_surface'].values.astype(np.float64) / 1000.0  # Pa to kPa
+pres = forcings['PRES_surface'].values.astype(np.float64)  # Pa
 ugrd_10m = forcings['UGRD_10maboveground'].values.astype(np.float64)
 vgrd_10m = forcings['VGRD_10maboveground'].values.astype(np.float64)
 
@@ -150,6 +168,5 @@ if SAVE_OUTPUT:
     log.info(f"Saving output to {SAVE_PATH}")
     os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
 
-    # Warmup period is first 8592 hours
     np.save(SAVE_PATH, np.array(runoff_sim))
     log.info(f"Saved {len(runoff_sim)} hourly runoff values")
