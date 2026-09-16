@@ -70,6 +70,7 @@ from "this run isn't comparable":
 
 ```python
 import json, numpy as np
+
 with np.load('tests/benchmarks/mts_cat-2453_runoff.npz') as d:
     print(json.loads(str(d['metadata'])))
 ```
