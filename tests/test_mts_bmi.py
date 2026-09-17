@@ -9,9 +9,6 @@ Coverage:
 - Warmup logic (_can_run_warmup, _is_warmup_trigger_step)
 - Normalization (_normalize with dict-based norm_stats)
 
-Whole-simulation regression against the committed benchmark lives in
-`test_validation.py`, which also covers the NextGen and t-route paths.
-
 NOTE: Tests use un-initialized BMI instances where possible. Methods that
 require model weights or config files are not tested here.
 """
