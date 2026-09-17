@@ -1,10 +1,8 @@
-"""
-Plot hydrograph of dhbv2 runoff generated from BMI/NextGen.
+"""Plot hydrograph of dhbv2-generated runoff from BMI/NextGen.
 
-Be aware that if you use outputs generated from ./scripts/forward_mts_xx.py, the
-first 358 days of runtime are already discarded. NextGen output will include
+Be aware that if you use outputs generated from ./scripts/forward_mts_example.py,
+the first 358 days of runtime are already discarded. NextGen output will include
 spinup, and therefore plots will show 0 flow for that period unless you remove it.
-@leoglonz
 """
 
 from pathlib import Path
@@ -59,10 +57,10 @@ def plot_hydrograph(
 
     Parameters
     ----------
-    time_start : str, optional
+    time_start
         Start of the time window to plot (e.g. '2009-01-01'). If None, uses
         the beginning of the data.
-    time_end : str, optional
+    time_end
         End of the time window to plot (e.g. '2009-12-31'). If None, uses
         the end of the data.
     """

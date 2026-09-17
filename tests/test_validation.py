@@ -1,5 +1,4 @@
-"""
-End-to-end validation that a δHBV2.0 MTS install reproduces benchmark performance.
+"""End-to-end validation of δHBV2.0 MTS install for benchmark reproduction.
 
 Unlike the rest of the suite, these tests do not exercise BMI plumbing in
 isolation -- they compare *whole simulations* produced by three routes to the

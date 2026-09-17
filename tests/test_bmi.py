@@ -1,5 +1,4 @@
-"""
-Tests for DeltaModelBmi (daily BMI) interface and internals.
+"""Tests for DeltaModelBmi (daily BMI) interface and internals.
 
 Coverage:
 - Constructor defaults and initial state

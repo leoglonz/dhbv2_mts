@@ -1,5 +1,4 @@
-"""
-Compare daily and MTS (hourly) δHBV2.0 runoff simulations.
+"""Compare daily and MTS (hourly) δHBV2.0 runoff simulations.
 
 Aggregates MTS hourly output to daily means, extracts daily values from the
 daily model (which repeats prediction/24 across 24 hours), then

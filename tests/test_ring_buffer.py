@@ -1,5 +1,4 @@
-"""
-Tests for the RingBuffer utility class.
+"""Tests for the RingBuffer utility.
 
 Coverage:
 - Initialization: shape, capacity, dtype, initial state

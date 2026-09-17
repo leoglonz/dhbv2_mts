@@ -1,5 +1,4 @@
-"""
-Tests for MtsDeltaModelBmi (hourly multi-timescale BMI) interface and internals.
+"""Tests for MtsDeltaModelBmi (hourly BMI) interface and internals.
 
 Coverage:
 - Constructor defaults and initial state

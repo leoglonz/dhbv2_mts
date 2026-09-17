@@ -1,5 +1,4 @@
-"""
-Shared paths, loaders, and comparison metrics for the δHBV2.0 MTS validation suite.
+"""Supporting fixtures for δHBV2.0 MTS validation suite.
 
 The suite compares three runoff series that should all describe the same
 hydrograph for catchment ``cat-2453``:

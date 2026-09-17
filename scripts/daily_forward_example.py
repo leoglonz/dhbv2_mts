@@ -9,7 +9,7 @@ The daily BMI:
 3. Makes a prediction at the end of each day (every 24 hours)
 4. Returns the same prediction for all 24 hourly timesteps until the next day
 
-We use catchment `cat-2453` (2454 and 2455 also available) on the CAMELS dataset
+We use catchment `cat-2453` (2454 and 2455 also available) in the CAMELS dataset
 as an example, with forcing timeseries available from 2008 to 2011.
 
 NOTE: The daily model requires 1yr (365 days = 8760 hours) of spinup data prior
