@@ -19,24 +19,33 @@ Example data is as follows:
 
 - Catchments: [`2453`, `2454`, `2455`]
 
-- Time: `2008-01-09 00:00:00` to `2015-12-30 23:00:00`.
+- Time: `2008-01-09 00:00:00` to `2010-12-30 23:00:00` (26,088 hourly steps).
 
 - Forcings:
 
-  - NetCDF: `./ngen_resources/data/forcing/camels_subset_2008-01-09 00_00_00_2015-12-30 23_00_00.nc`
+  - NetCDF (all three catchments): `./ngen_resources/data/forcing/camels_subset_2008-01-09 00_00_00_2010-12-30 23_00_00.nc`
 
-  - CSV: `./ngen_resources/data/forcing/cat-xxxx_2004-10-01 00_00_00_2018-09-30 23_00_00.csv`
+  - CSV (per catchment): `./ngen_resources/data/forcing/cat-2453_2008-01-09 00_00_00_2010-12-30 23_00_00.csv`
+
+  Both hold the same data — the CSV is generated from the NetCDF by
+  `./scripts/make_csv_forcing.py`, which will write one for any of the three
+  catchments. NextGen reads either; see
+  [Forcing providers](./5-run_ngen.md#forcing-providers).
+
+  Files under `./ngen_resources/data/forcing/depr/` are an older 2008–2015
+  dataset kept for reference. They carry only 3 of the 8 forcings the MTS
+  model needs and cannot drive it.
 
 - Attributes:
 
-  - Stored in BMI configs `./ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml`. *BMI will later support direct reading from a remotely hosted HydroFabric geopackage with attributes for all 800k catchments.*
+  - Stored in BMI configs `./ngen_resources/data/dhbv_2_mts/config/bmi_cat-2453.yaml`. *BMI could later support direct reading from a remotely hosted Hydrofabric geopackage with attributes for all Hydrofabric catchments.*
 
 - Geopackage:
-  - `./ngen_resources/data/geo/camels_subset_hf2.gpkg`
+  - `./ngen_resources/data/geo/camels_subset_hf2_2.gpkg`
 
 <br/>
 
-> (i) To create NextGen HydroFabric geopackages for other catchments, see `./scripts/utils/make_gpkg.py`.
+> (i) To create NextGen Hydrofabric geopackages for other catchments, see `./scripts/utils/make_gpkg.py`.
 >
 > (ii) A script for getting static attributes for other catchments will be added at a later time.
 
@@ -49,15 +58,23 @@ Example data is as follows:
 
 ### CSV/NetCDF Format (NextGen Standard)
 
-The dhbv2 BMIs expects a CSV/NetCDF file with minimum attributes:
+The dhbv2 BMIs expect a CSV/NetCDF file with minimum attributes:
 
 - `time`: Timestamp (ns)
 
-- `precip_rate[mm h-1]`: Precipitation in mm/h (note that NextGen will assume `precip_rate` is in `mm s-1` unless a unit header as included as is done here.)
+- `precip_rate[mm s^-1]`: Precipitation. The `[units]` suffix is how a CSV
+  declares its units to NextGen: ngen strips the bracket, then converts the
+  values to whatever the BMI asks for through `get_var_units()`. A NetCDF
+  declares the same thing through each variable's `units` attribute.
 
-- `TMP_2maboveground`: Air Temperature in K.
+  Note that the bracket is *not* part of the variable name. A realization's
+  `variables_names_map` should only reference the bare `precip_rate`.
 
-- `PET_hargreaves`: Potential evapotranspiration in mm/h. (This can be calculated and added to an existing dataset with `./scripts/utils/add_pet.py`.)
+- `TMP_2maboveground[K]`: Air Temperature. The MTS BMI declares `degC`, so this
+  one is converted on the way in — see
+  [8-validation](./8-validation.md#forcing-units-the-failure-this-catches).
+
+- `PET_hargreaves`: Potential evapotranspiration in mm/h. (This can be calculated and added to an existing dataset with `./scripts/utils/add_pet.py`, or otherwise calculated within the BMI during runtime.)
 
 <br/>
 
@@ -83,8 +100,9 @@ dhbv2/
         │
         ├── forcing/          # CSV/NetCDF forcings
         │   ├── camels_subset_2008...nc
-        │   └── cat-2453_2008...csv
+        │   ├── cat-2453_2008...csv
+        │   └── depr/             # older 2008-2015 data, MTS-incompatible
         │
-        └── geo/          # GeoJSON/Geopackage HydroFabric data
-            └── camels_subset_hf2.gpkg
+        └── geo/          # GeoJSON/Geopackage Hydrofabric data
+            └── camels_subset_hf2_2.gpkg
 ```

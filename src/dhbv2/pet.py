@@ -92,7 +92,7 @@ def calc_hourly_hargreaves_pet(
     day_to_idx = {d: i for i, d in enumerate(days)}
     idx_daily = np.array([day_to_idx[d] for d in day_index])
 
-    # 3. Aggregate hourly → daily
+    # 3. Aggregate hourly -> daily
     for d_idx, day in enumerate(days):
         mask = idx_daily == d_idx
         th = temp[mask]

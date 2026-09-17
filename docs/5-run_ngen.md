@@ -135,15 +135,55 @@ docker system prune -f
 
 </br>
 
+## Forcing Providers
+
+NextGen can read forcing two ways, and this repo ships a working example of
+each for `cat-2453`:
+
+| Realization | Provider | Forcing |
+| --- | --- | --- |
+| `realization_cat-2453.json` | `CsvPerFeature` | `./data/forcing/cat-2453_2008-01-09....csv` |
+| `realization_nc_cat-2453.json` | `NetCDF` | `./data/forcing/camels_subset_....nc` |
+
+```json
+"forcing": {
+  "file_pattern": ".*{{id}}.*\\.csv",
+  "path": "./data/forcing/",
+  "provider": "CsvPerFeature"
+}
+```
+
+```json
+"forcing": {
+  "path": "./data/forcing/camels_subset_2008-01-09 00_00_00_2010-12-30 23_00_00.nc",
+  "provider": "NetCDF"
+}
+```
+
+The CSV is generated from the NetCDF rather than maintained separately:
+
+```bash
+python scripts/make_csv_forcing.py  # cat-2453
+python scripts/make_csv_forcing.py cat-2454 cat-2455
+```
+
+Note:
+
+- **Units.** CSV declares units in its column header, `precip_rate[mm s^-1]`; NetCDF declares them in each variable's `units` attribute.
+
+- **Names in `variables_names_map`.** Use the **bare** variable name, `precip_rate`, for both. ngen strips the `[units]` bracket while reading the CSV header.
+
+</br>
+
 ## Execution
 
-We give a few examples to illustrate NextGen execution. In all cases, we will require
+We give a few examples to illustrate NextGen execution. In all cases, we require
 
-1. **NextGen HydroFabric** (subset) for desired catchments stored as either a geojson or geopackage;
-2. **realization** Json that configures the ngen runtime
-3. the **name of each catchment and nexus** to simulate. If doing simulation for all catchments in your HydroFabric, these need not be specified.
+1. **NextGen Hydrofabric** (subset) for desired catchments stored as either a geojson or geopackage;
+2. **realization** json that configures the ngen runtime;
+3. the **name of each catchment and nexus** to simulate. If doing simulation for all catchments in the Hydrofabric, these need not be specified.
 
-To run, we point our ngen executable to the above. For a single catchment,
+To run, point the ngen executable to the above. For one catchment:
 
 ```bash
 cd ./ngen
@@ -156,8 +196,8 @@ cd ./ngen
 
 # Geopackage
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg 'cat-2453' \
-    data/geo/camels_subset_hf2.gpkg 'nex-2454' \
+    data/geo/camels_subset_hf2_2.gpkg 'cat-2453' \
+    data/geo/camels_subset_hf2_2.gpkg 'nex-2454' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 
 # Or with Docker
@@ -167,8 +207,8 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg 'cat-2453' \
-    data/geo/camels_subset_hf2.gpkg 'nex-2454' \
+    data/geo/camels_subset_hf2_2.gpkg 'cat-2453' \
+    data/geo/camels_subset_hf2_2.gpkg 'nex-2454' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 ```
 
@@ -176,18 +216,18 @@ With default settings, ngen outputs will save to `./ngen/output/`.
 
 > Notes on Docker:
 >
-> We use `-v $(pwd)/data:/ngen/data` to replace the container's internal data directory with that of your local directory. This enables usate and modification of realizations, configs, etc. outside of the container. `-v $(pwd)/output:/ngen/output` similarly ensures outputs are accessible outside of the container. `localbuild/ngen:latest` is the name of the Docker image.
+> We use `-v $(pwd)/data:/ngen/data` to replace the container's internal data directory with that of your local directory. This enables usage and modification of realizations, configs, etc. outside of the container. `-v $(pwd)/output:/ngen/output` similarly ensures outputs are accessible outside of the container. `localbuild/ngen:latest` is the name of the Docker image.
 >
-> `output_root` in your realization should begin with `./output/` or otherwise matches your flag `-v $(pwd)/output:/ngen/output`. This ensures ngen outputs are saved outside of the Docker container.
+> `output_root` in your realization should begin with `./output/` or otherwise matche the flag `-v $(pwd)/output:/ngen/output`. This ensures ngen outputs are saved outside of the Docker container.
 
-To run all catchments defined in the geopackage/geojson (3 in our example), leave catchment and nexus arguments (e.g., `'cat-2453'` and `'nex-2454'`) undefined like so:
+To run all catchments defined in the geopackage/geojson (three in our example), leave catchment and nexus arguments (e.g., `'cat-2453'` and `'nex-2454'`) undefined like so:
 
 ```bash
 cd ./ngen
 
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 
 # Or with Docker
@@ -197,8 +237,8 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_cat-2453.json
 ```
 
@@ -208,8 +248,8 @@ Realizations can accomodate catchment-specific formulations in addition to the "
 cd ./ngen
 
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_multi_cat-2453.json
 
 # Or with Docker
@@ -219,8 +259,8 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_multi_cat-2453.json
 ```
 
@@ -231,6 +271,8 @@ For instructions on routing NextGen runoff simulations, see [7-routing](./7-rout
 ## Validation
 
 Tests supplied by ngen and troute repositories can be used to verify your Docker installation is behaving as expected.
+
+> These checks validate the **NextGen build**. To validate that dhbv2 running inside NextGen reproduces benchmark performance, see [8-validation](./8-validation.md).
 
 ### (1) Build Info
 

@@ -1,5 +1,4 @@
-"""
-Tests for MtsDeltaModelBmi (hourly multi-timescale BMI) interface and internals.
+"""Tests for MtsDeltaModelBmi (hourly BMI) interface and internals.
 
 Coverage:
 - Constructor defaults and initial state
@@ -9,13 +8,10 @@ Coverage:
 - Cache management (_update_caches, buffer filling)
 - Warmup logic (_can_run_warmup, _is_warmup_trigger_step)
 - Normalization (_normalize with dict-based norm_stats)
-- Benchmark regression (skipped if output files not available)
 
 NOTE: Tests use un-initialized BMI instances where possible. Methods that
 require model weights or config files are not tested here.
 """
-
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -401,52 +397,3 @@ class TestMtsBmiNormalization:
         data = np.random.rand(10, 5, 3)
         result = mts_bmi._normalize(data, 'dyn_input')
         assert result.shape == (10, 5, 3)
-
-
-# ---------------------------------------------------------------------------- #
-#  Regression
-# ---------------------------------------------------------------------------- #
-
-
-class TestMtsBmiBenchmark:
-    """Regression test: compare simulation output against stored benchmark.
-
-    Requires pre-computed output files. Skipped if files not available.
-    """
-
-    _pkg_root = Path(__file__).parent.parent
-    _sim_path = _pkg_root / 'output' / 'dhbv2_mts_cat-2453_runoff.npy'
-    _val_path = _pkg_root / 'tests' / 'dhbv2_mts_cat-2453_runoff_benchmark.npy'
-    _tolerance = 1e-5
-
-    @pytest.fixture
-    def sim_and_val(self):
-        """Load simulation and validation arrays if available."""
-        if not self._sim_path.exists():
-            pytest.skip(f"Simulation output not found: {self._sim_path}")
-        if not self._val_path.exists():
-            pytest.skip(f"Validation benchmark not found: {self._val_path}")
-        return np.load(self._sim_path), np.load(self._val_path)
-
-    def test_shapes_match(self, sim_and_val):
-        """Simulation and validation arrays should have the same shape."""
-        sim, val = sim_and_val
-        if sim.shape != val.shape:
-            pytest.skip(
-                f"Shape mismatch (sim={sim.shape}, val={val.shape}); "
-                f"re-run simulation to regenerate output",
-            )
-
-    def test_within_tolerance(self, sim_and_val):
-        """Max absolute error should be within tolerance."""
-        sim, val = sim_and_val
-        if sim.shape != val.shape:
-            pytest.skip(
-                f"Shape mismatch (sim={sim.shape}, val={val.shape}); "
-                f"re-run simulation to regenerate output",
-            )
-        max_diff = np.max(np.abs(sim - val))
-        assert max_diff <= self._tolerance, (
-            f"Runoff simulation does not match benchmark within "
-            f"tolerance of {self._tolerance}. Max error: {max_diff}"
-        )

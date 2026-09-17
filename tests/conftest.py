@@ -1,7 +1,12 @@
 """Shared fixtures for dhbv2 BMI tests."""
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
+
+sys.path.insert(0, str(Path(__file__).parent))
 
 from dhbv2.bmi import DeltaModelBmi
 from dhbv2.mts_bmi import MtsDeltaModelBmi
