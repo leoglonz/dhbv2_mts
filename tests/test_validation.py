@@ -104,12 +104,12 @@ def assert_matches(sim, ref, label: str, capsys, hint: str = '') -> None:
 
 @pytest.fixture(scope='module')
 def run_dir(request):
-    """Directory holding the validator's own ngen output, from ``--run-dir``."""
+    """Directory holding the validator's own ngen output; from `--run-dir`."""
     path = request.config.getoption('--run-dir')
     if not path:
         pytest.skip(
-            "No --run-dir given. Run the shipped cat-2453 example through your "
-            "own ngen, then re-run with --run-dir=<that run's output>.",
+            "No --run-dir given. Run the cat-2453 example through ngen, then "
+            "rerun with pytest flag --run-dir=<ngen output dir>.",
         )
     return Path(path)
 
