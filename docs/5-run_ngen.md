@@ -160,13 +160,6 @@ each for `cat-2453`:
 }
 ```
 
-The CSV is generated from the NetCDF rather than maintained separately:
-
-```bash
-python scripts/make_csv_forcing.py  # cat-2453
-python scripts/make_csv_forcing.py cat-2454 cat-2455
-```
-
 Note:
 
 - **Units.** CSV declares units in its column header, `precip_rate[mm s^-1]`; NetCDF declares them in each variable's `units` attribute.

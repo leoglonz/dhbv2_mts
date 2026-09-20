@@ -27,14 +27,8 @@ Example data is as follows:
 
   - CSV (per catchment): `./ngen_resources/data/forcing/cat-2453_2008-01-09 00_00_00_2010-12-30 23_00_00.csv`
 
-  Both hold the same data — the CSV is generated from the NetCDF by
-  `./scripts/make_csv_forcing.py`, which will write one for any of the three
-  catchments. NextGen reads either; see
+  Both hold the same data, and NextGen reads either; see
   [Forcing providers](./5-run_ngen.md#forcing-providers).
-
-  Files under `./ngen_resources/data/forcing/depr/` are an older 2008–2015
-  dataset kept for reference. They carry only 3 of the 8 forcings the MTS
-  model needs and cannot drive it.
 
 - Attributes:
 
