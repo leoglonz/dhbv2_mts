@@ -4,12 +4,11 @@ Before you trust a δHBV2.0 result, confirm your install reproduces a known one.
 This page describes a benchmark case for catchment `cat-2453` and four checks
 against it, each answering a different question:
 
-| Leg | Question it answers | Needs Docker |
+| Leg | Question it answers | Needs |
 | --- | --- | --- |
-| **1. Standalone** | Does the model itself reproduce the benchmark hydrograph? | no |
-| **2. NextGen** | Is my realization feeding the model what it expects? | yes |
-| **3. T-Route** | Is the routing stack attached and conserving water? | yes |
-| **4. CSV forcing** | Do both forcing providers agree? | yes |
+| **1. Standalone** | Does the model itself reproduce the benchmark hydrograph? | Python only |
+| **2. NextGen** | Is my realization feeding the model what it expects? | your own ngen |
+| **3. T-Route** | Is the routing stack attached and conserving water? | your own ngen + t-route |
 
 Leg 2 matters more than it looks. The standalone driver and NextGen reach the
 same BMI by different routes, and a realization can be wrong in ways the
@@ -19,17 +18,26 @@ standalone path cannot see — see [Forcing units](#forcing-units-the-failure-th
 
 ## Quick Start
 
-```bash
-# All four legs, then the comparison (~3.5 min)
-./scripts/run_validation.sh
+Nothing here runs NextGen for you, and nothing needs Docker. Run the shipped
+`cat-2453` example through whatever NextGen build you already have, then point
+the suite at its output.
 
-# Or one leg at a time
-./scripts/run_validation.sh standalone
-./scripts/run_validation.sh ngen
-./scripts/run_validation.sh troute
-./scripts/run_validation.sh csv
-./scripts/run_validation.sh check      # compare existing artifacts only
+```bash
+# 1. The standalone leg needs no ngen at all (~1 min on CPU)
+python scripts/mts_forward_example.py
+
+# 2. Run the shipped example through your own ngen. The t-route realization
+#    writes cat-2453.csv *and* troute_output_*.nc, so one run covers legs 2
+#    and 3; use realization_nc_cat-2453.json instead to skip routing.
+ngen <gpkg> cat-2453 <gpkg> nex-2454 \
+    ./data/dhbv_2_mts/realizations/realization_troute_cat-2453.json
+
+# 3. Validate whatever you produced
+pytest tests/test_validation.py --run-dir=/path/to/that/output
 ```
+
+`--run-dir` is searched recursively, so any output layout works as long as it
+contains `cat-2453.csv` and, for routing, `troute_output_*.nc`.
 
 A clean run ends with:
 
@@ -37,20 +45,15 @@ A clean run ends with:
 standalone vs benchmark:        max|diff|=0.000e+00 ... NSE=1.000000000
 ngen vs benchmark:              max|diff|=1.460e-10 ... NSE=1.000000000
 ngen vs standalone:             max|diff|=1.460e-10 ... NSE=1.000000000
-ngen (CSV forcing) vs benchmark:max|diff|=8.335e-12 ... NSE=1.000000000
-ngen (routing run) vs benchmark:max|diff|=1.460e-10 ... NSE=1.000000000
 t-route window: 17328 steps, 2009-01-08 01:00:00 -> 2010-12-31 00:00:00
 t-route vs unrouted:            n=17327 vol_ratio=1.000037 r=0.995869
 standalone runoff ratio: 0.5209
-15 passed
+13 passed
 ```
 
-Environment variables:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `NGEN_IMAGE` | `localbuild/ngen:latest` | NextGen image tag to run |
-| `MOUNT_LOCAL_SRC` | `0` | Set to `1` to run the image against this checkout's `dhbv2`/`hydrodl2`/`dmg` instead of the copies baked into the image |
+Run it with no `--run-dir` at all and you still get 8 checks — benchmark
+integrity, the standalone leg, and the water balance — with the ngen and
+t-route legs skipped rather than failed.
 
 </br>
 
@@ -111,29 +114,28 @@ hydrograph by `~1e-3`, a thousand times the tolerance.
 Runs the BMI directly from Python, with no NextGen involved.
 
 ```bash
-./scripts/run_validation.sh standalone
+python scripts/mts_forward_example.py
 ```
 
-This writes `output/validation/standalone_cat-2453.npy` (26,088 float64 values
-in `m h-1`). Takes about a minute on CPU.
-
-Under the hood it is `scripts/mts_forward_example.py` with
-`DHBV2_MTS_OUTPUT` pointed at the validation artifact, so you can also run that
-script directly for interactive work — see [4-run_standalone](./4-run_standalone.md).
+This writes `output/dhbv_2_mts_cat-2453_runoff.npy` (26,088 float64 values in
+`m h-1`), which is where the suite looks by default. Takes about a minute on
+CPU. Set `DHBV2_MTS_OUTPUT` to write elsewhere — see
+[4-run_standalone](./4-run_standalone.md).
 
 </br>
 
 ## Leg 2 — NextGen
 
 Runs the same BMI inside NextGen, over the same window, using
-`realization_validation_cat-2453.json`.
+`realization_nc_cat-2453.json`.
 
 ```bash
-./scripts/run_validation.sh ngen
+ngen <gpkg> cat-2453 <gpkg> nex-2454 \
+    ./data/dhbv_2_mts/realizations/realization_nc_cat-2453.json
 ```
 
-This writes `output/validation/cat-2453.csv`. It needs a built NextGen image;
-see [5-run_ngen](./5-run_ngen.md).
+Point `--run-dir` at wherever that wrote `cat-2453.csv`. Any NextGen build will
+do; see [5-run_ngen](./5-run_ngen.md) if you still need one.
 
 ### Forcing units: the failure this catches
 
@@ -172,9 +174,9 @@ Two things about `variables_names_map` are easy to get wrong:
   cache`. Use `precip_rate` with both providers.
 - **The archived CSVs under `ngen_resources/data/forcing/depr/` cannot drive
   the MTS model.** They carry only precipitation, temperature, and Hargreaves
-  PET — 3 of the 8 inputs it requires. The CSV example this suite exercises is
+  PET — 3 of the 8 inputs it requires. The usable CSV example is
   `ngen_resources/data/forcing/cat-2453_2008-01-09 00_00_00_2010-12-30 23_00_00.csv`,
-  generated from the NetCDF by `scripts/make_csv_forcing.py` with all 8.
+  which ships with all 8 and covers the full window.
 
 </br>
 
@@ -184,11 +186,13 @@ Runs NextGen with Muskingum-Cunge routing via
 `realization_troute_cat-2453.json`, over the same full window as leg 2.
 
 ```bash
-./scripts/run_validation.sh troute
+ngen <gpkg> cat-2453 <gpkg> nex-2454 \
+    ./data/dhbv_2_mts/realizations/realization_troute_cat-2453.json
 ```
 
-This writes `output/validation_troute/cat-2453.csv` and a single
-`output/validation_troute/stream_output/troute_output_200901080000.nc`.
+This writes `cat-2453.csv` alongside a single
+`stream_output/troute_output_200901080000.nc`. Because it produces both, one
+`--run-dir` covers legs 2 and 3 together.
 
 ### What gets routed
 
@@ -230,33 +234,11 @@ attenuate the hydrograph, so the suite asserts routed/unrouted volume within
 1% and correlation above 0.95. Measured over the full period: `1.000037` and
 `0.9959`.
 
-The suite also checks that the routing run's own unrouted runoff matches the
-benchmark, so a routing discrepancy can never be blamed on that run having
-simulated something different.
+Because a single run supplies both legs, the runoff compared against the
+benchmark in leg 2 *is* the series that fed t-route — so a routing discrepancy
+can never be blamed on that run having simulated something different.
 
 </br>
-
-## Leg 4 — CSV Forcing
-
-Runs NextGen through the `CsvPerFeature` provider instead of `NetCDF`, using
-`realization_cat-2453.json`.
-
-```bash
-./scripts/run_validation.sh csv
-```
-
-This generates `ngen_resources/data/forcing/cat-2453_2008-01-09 00_00_00_2010-12-30 23_00_00.csv`
-if absent (via `scripts/make_csv_forcing.py`) and writes
-`output/validation_csv/cat-2453.csv`.
-It runs the shorter 9,312-step window that realization ships with, and is
-compared against the benchmark's first 9,312 steps.
-
-Both providers must hand the model identical numbers. They currently agree to
-`8.3e-12` — the CSV is written at `%.9g`, the shortest decimal form that
-round-trips the NetCDF's float32 values exactly. The leg exists because the
-CSV example is generated data that can silently fall out of step with the
-NetCDF it came from, exactly the failure this page is here to prevent. See
-[Forcing providers](./5-run_ngen.md#forcing-providers).
 
 For routing background and the DDR alternative, see [7-routing](./7-routing.md).
 
@@ -285,10 +267,9 @@ for which no benchmark exists yet.
 | Standalone passes, NextGen fails | The realization. Check `variables_names_map` and forcing units. |
 | Both pass, t-route fails | Routing config: `start_datetime` inside spin-up, or `nts`/`max_loop_size`/`qts_subdivisions` inconsistent with the realization window. |
 | t-route routed fewer hours than expected | `nts` is too small for the window. It is routed hours × `qts_subdivisions`, not hours. |
-| Only the CSV leg fails | The CSV has drifted from the NetCDF. Regenerate with `scripts/make_csv_forcing.py`, and check its headers still carry `[units]` and that `variables_names_map` uses the bare name. |
 | Runoff ratio ≥ 1.0 | A forcing-unit error, most likely temperature. Not a model-skill problem. |
 | `max|diff|` between `1e-6` and `1e-4` | Possibly a genuine numerical-environment difference (BLAS, CPU, PyTorch build). Check NSE and volume ratio: if both are ~1.0 the hydrograph is intact. Report it as an [issue](https://github.com/mhpi/dhbv2/issues) with your `package_versions`. |
-| A leg is skipped | Its artifact was not produced. The skip message names the command that produces it. |
+| A leg is skipped | Its artifact was not found. Check `--run-dir` actually contains `cat-2453.csv` / `troute_output_*.nc`; the skip message says what was missing and where it looked. |
 
 A leg is skipped **only** when its artifact is absent. An artifact that exists
 but disagrees always fails — it is never quietly reported as a pass.
@@ -301,8 +282,12 @@ Maintainers only, and only when a change is *intended* to move the numbers:
 
 ```bash
 python scripts/mts_forward_example.py
-python scripts/make_mts_benchmark.py
+python scripts/utils/make_mts_benchmark.py
 ```
+
+It promotes `output/dhbv_2_mts_cat-2453_runoff.npy` by default, refuses any run
+whose length is not the benchmark case's 26,088 steps, and records the hashes
+and package versions above alongside the series.
 
 A benchmark refreshed to silence a failing validation run defeats the purpose
 of having one. Regenerate deliberately, and say why in the commit message.

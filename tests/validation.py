@@ -1,15 +1,15 @@
 """Supporting fixtures for δHBV2.0 MTS validation suite.
 
 The suite compares three runoff series that should all describe the same
-hydrograph for catchment ``cat-2453``:
+hydrograph for catchment `cat-2453`:
 
-1. **standalone** -- the BMI driven directly by ``scripts/mts_forward_example.py``
-2. **ngen** -- the same BMI driven by NextGen through its Python BMI adapter
-3. **t-route** -- NextGen's runoff routed through Muskingum-Cunge
+1. standalone -- the BMI driven directly by `scripts/mts_forward_example.py`
+2. ngen -- the same BMI driven by NextGen through its Python BMI adapter
+3. t-route -- NextGen's runoff routed through Muskingum-Cunge
 
-Leg 1 answers "is the model reproducing the benchmark", leg 2 answers "is my
-NextGen wiring feeding the model what it expects", and leg 3 answers "is the
-routing stack attached and conserving water".
+(1) answers "is the model reproducing the benchmark", (2) answers "is ngen
+wiring feeding the model what it expects", and (3) answers "is the routing stack
+attached and conserving water".
 
 @leoglonz
 """
@@ -18,44 +18,42 @@ import glob
 import hashlib
 import json
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
+import pytest
 
 PKG_ROOT = Path(__file__).parent.parent
 
 
+# Tolerances
+ATOL = 1e-6
+ROUTED_VOLUME_TOL = 0.01
+ROUTED_MIN_CORR = 0.95
+
+
 # ---------------------------------------------------------------------------- #
-#  Fixed properties of the shipped validation case
+#  Fixed properties of the included realizations
 # ---------------------------------------------------------------------------- #
 
 
 CATCHMENT = 'cat-2453'
 CATCHMENT_FEATURE_ID = 2453
-NEXUS = 'nex-2454'
 
-#: Catchment drainage area [km2], from the shipped BMI config (`catchsize`).
-CATCHMENT_AREA_KM2 = 7.7805003825041545
+CATCHMENT_AREA_KM2 = 7.7805003825041545  # km2
 
-#: Full forcing window covered by the shipped NetCDF file.
+# Full forcing window covered by the NetCDF file.
 SIM_START = '2008-01-09 00:00:00'
 SIM_END = '2010-12-30 23:00:00'
 N_STEPS_FULL = 26088
 
-#: First step at which the model has cleared spin-up and emits flow, with the
-#: shipped `bmi_cat-2453.yaml` (351 daily + 336 hourly warmup, 14-day cycle).
+# First step at which the model has cleared warmup, with `bmi_cat-2453.yaml`
+# (351 daily + 336 hourly warmup, 14-day cycle).
 FIRST_FLOW_STEP = 8760
 
-#: The routed leg runs the same window as the others, but t-route only routes
-#: the post-spin-up remainder -- `start_datetime` in `routing_config.yaml` is
-#: set to where flow begins, and `nts` to the hours that follow.
-ROUTED_START = '2009-01-08 00:00:00'
+# t-route routes only the post-spin-up remainder -- `start_datetime` in
+# `routing_config.yaml` is set to where warmup ends, `nts` to the hours after.
 N_STEPS_ROUTED = N_STEPS_FULL - FIRST_FLOW_STEP
-
-#: `realization_cat-2453.json` (the CsvPerFeature example) runs a shorter
-#: window than the validation realizations -- it is a usage example first.
-N_STEPS_CSV_EXAMPLE = 9312
 
 RUNOFF_VAR = 'land_surface_water__runoff_volume_flux'
 RUNOFF_UNITS = 'm h-1'
@@ -67,81 +65,33 @@ FORCING_PATH = (
 MODEL_CONFIG_PATH = DATA_ROOT / 'dhbv_2_mts' / 'model' / 'dhbv_2_mts' / 'config.yaml'
 BENCHMARK_PATH = PKG_ROOT / 'tests' / 'benchmarks' / 'mts_cat-2453_runoff.npz'
 
-#: Where `scripts/run_validation.sh` deposits the artifacts under test.
-VALIDATION_DIR = PKG_ROOT / 'output' / 'validation'
-VALIDATION_TROUTE_DIR = PKG_ROOT / 'output' / 'validation_troute'
-VALIDATION_CSV_DIR = PKG_ROOT / 'output' / 'validation_csv'
+STANDALONE_RUN = PKG_ROOT / 'output' / f'dhbv_2_mts_{CATCHMENT}_runoff.npy'
 
-STANDALONE_RUN = VALIDATION_DIR / f'standalone_{CATCHMENT}.npy'
-NGEN_RUN = VALIDATION_DIR / f'{CATCHMENT}.csv'
-NGEN_ROUTED_RUN = VALIDATION_TROUTE_DIR / f'{CATCHMENT}.csv'
-NGEN_CSV_FORCING_RUN = VALIDATION_CSV_DIR / f'{CATCHMENT}.csv'
-TROUTE_STREAM_DIR = VALIDATION_TROUTE_DIR / 'stream_output'
 
 # ---------------------------------------------------------------------------- #
-#  Tolerances
+#  Benchmark provenance
 # ---------------------------------------------------------------------------- #
-
-#: Agreement required to call a setup correct, in m h-1. Repeat runs on one
-#: machine are bit-identical and ngen-vs-standalone lands at ~1e-10 (the limit
-#: of ngen's 9-significant-figure CSV), so this leaves ~4 orders of headroom for
-#: a different BLAS or CPU while still catching any real misconfiguration --
-#: a single wrong forcing unit moves the series by ~1e-3.
-ATOL = 1e-6
-
-#: Muskingum-Cunge over one 2.1 km reach should neither create nor destroy
-#: water. Anything outside this means the routing stack is misconfigured.
-ROUTED_VOLUME_TOL = 0.01
-ROUTED_MIN_CORR = 0.95
 
 
 def sha256(path) -> str:
-    """Return the SHA-256 hex digest of a file.
-
-    Parameters
-    ----------
-    path : str or Path
-        File to digest.
-
-    Returns
-    -------
-    str
-        Hex digest, or ``'<missing>'`` if the file does not exist.
-    """
+    """Return a file's SHA-256 hex digest, or '<missing>' if it is absent."""
     path = Path(path)
     if not path.exists():
         return '<missing>'
-    h = hashlib.sha256()
+    digest = hashlib.sha256()
     with open(path, 'rb') as f:
         for chunk in iter(lambda: f.read(1 << 20), b''):
-            h.update(chunk)
-    return h.hexdigest()
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def bmi_config_path(catchment: str = CATCHMENT) -> Path:
-    """Return the path to a catchment's BMI config.
-
-    Parameters
-    ----------
-    catchment : str, optional
-        Catchment id, e.g. ``'cat-2453'``.
-
-    Returns
-    -------
-    Path
-        Path to the BMI yaml.
-    """
+    """Return the path to a catchment's BMI config."""
     return DATA_ROOT / 'dhbv_2_mts' / 'config' / f'bmi_{catchment}.yaml'
 
 
 def package_versions() -> dict[str, str]:
-    """Return installed versions of the packages that determine the numbers.
-
-    Returns
-    -------
-    dict
-        Package name to version string, ``'<not installed>'`` when absent.
-    """
+    """Return installed versions of the packages that determine the numbers."""
     versions = {}
     for name in ('dhbv2', 'hydrodl2', 'dmg', 'torch', 'numpy'):
         try:
@@ -158,13 +108,7 @@ def package_versions() -> dict[str, str]:
 
 
 def load_benchmark() -> tuple[np.ndarray, dict]:
-    """Load the committed benchmark runoff series and its provenance.
-
-    Returns
-    -------
-    tuple
-        ``(runoff, metadata)`` -- runoff in m h-1 and the provenance dict.
-    """
+    """Load the committed benchmark runoff [m h-1] and its dict."""
     with np.load(BENCHMARK_PATH, allow_pickle=False) as data:
         runoff = data['runoff'].astype(np.float64)
         metadata = json.loads(str(data['metadata']))
@@ -172,41 +116,27 @@ def load_benchmark() -> tuple[np.ndarray, dict]:
 
 
 def load_ngen_csv(path) -> pd.Series:
-    """Load a NextGen per-catchment output CSV as a time-indexed runoff series.
-
-    Parameters
-    ----------
-    path : str or Path
-        Path to ngen's ``cat-*.csv`` output.
-
-    Returns
-    -------
-    pd.Series
-        Runoff [m h-1] indexed by timestamp.
-    """
+    """Load a NextGen `cat-*.csv` as runoff [m h-1] indexed by timestamp."""
     frame = pd.read_csv(path)
     frame.columns = [c.strip() for c in frame.columns]
     frame['Time'] = pd.to_datetime(frame['Time'].astype(str).str.strip())
     return frame.set_index('Time')[RUNOFF_VAR].astype(np.float64)
 
 
-def load_troute_flow(
-    stream_dir=TROUTE_STREAM_DIR,
-    feature_id: int = CATCHMENT_FEATURE_ID,
-) -> pd.Series:
-    """Load routed flow for one feature from t-route's per-hour NetCDF output.
+def load_troute_flow(stream_dir, feature_id: int = CATCHMENT_FEATURE_ID) -> pd.Series:
+    """Load one feature's routed flow [m3 s-1] from t-route's NetCDF output.
 
     Parameters
     ----------
-    stream_dir : str or Path, optional
-        Directory holding ``troute_output_*.nc``.
-    feature_id : int, optional
-        Numeric hydrofabric feature id, e.g. ``2453``.
+    stream_dir
+        Directory holding `troute_output_*.nc`.
+    feature_id
+        Numeric hydrofabric feature id, e.g. `2453`.
 
     Returns
     -------
     pd.Series
-        Routed flow [m3 s-1] indexed by timestamp.
+        Routed flow indexed by timestamp.
     """
     import xarray as xr
 
@@ -224,37 +154,65 @@ def load_troute_flow(
     return pd.Series(flows, index=pd.DatetimeIndex(times)).sort_index()
 
 
-def runoff_to_cms(runoff: pd.Series, area_km2: float = CATCHMENT_AREA_KM2) -> pd.Series:
-    """Convert a runoff depth rate to a volumetric flow rate.
+def find_ngen_csv(run_dir, catchment: str = CATCHMENT) -> Path:
+    """Locate a catchment's ngen output CSV anywhere under a run directory.
 
     Parameters
     ----------
-    runoff : pd.Series
-        Runoff [m h-1].
-    area_km2 : float, optional
-        Contributing area [km2].
+    run_dir
+        Directory holding the validator's own ngen run of the shipped example.
+    catchment
+        Catchment id, e.g. `cat-2453`.
 
     Returns
     -------
-    pd.Series
-        Flow [m3 s-1].
+    Path
+        The matching `cat-*.csv`.
     """
+    matches = sorted(Path(run_dir).rglob(f'{catchment}.csv'))
+    if not matches:
+        pytest.skip(
+            f"No {catchment}.csv under {run_dir}. Run the shipped example "
+            f"through your own ngen first -- see docs/8-validation.md.",
+        )
+    return matches[0]
+
+
+def find_troute_dir(run_dir) -> Path:
+    """Locate the directory of t-route NetCDF output under a run directory.
+
+    Parameters
+    ----------
+    run_dir
+        Directory holding the validator's own ngen run of the shipped example.
+
+    Returns
+    -------
+    Path
+        Directory containing `troute_output_*.nc`.
+    """
+    matches = sorted(Path(run_dir).rglob('troute_output_*.nc'))
+    if not matches:
+        pytest.skip(
+            f"No troute_output_*.nc under {run_dir}. Re-run the shipped example "
+            f"with realization_troute_cat-2453.json to validate routing.",
+        )
+
+    # t-route may leave stray files beside its real output directory, so take
+    # the directory holding the most rather than the first one found.
+    by_dir: dict[Path, int] = {}
+    for match in matches:
+        by_dir[match.parent] = by_dir.get(match.parent, 0) + 1
+    return max(by_dir, key=lambda d: (by_dir[d], str(d)))
+
+
+def runoff_to_cms(runoff: pd.Series, area_km2: float = CATCHMENT_AREA_KM2) -> pd.Series:
+    """Convert runoff [m h-1] to volumetric flow [m3 s-1]."""
     return runoff * area_km2 * 1e6 / 3600.0
 
 
 def forcing_precip_mm_h(catchment: str = CATCHMENT) -> np.ndarray:
-    """Return the catchment's precipitation forcing in the BMI's declared units.
-
-    Parameters
-    ----------
-    catchment : str, optional
-        Catchment id.
-
-    Returns
-    -------
-    np.ndarray
-        Precipitation [mm h-1], one value per hourly step.
-    """
+    """Return a catchment's hourly precipitation forcing [mm h-1]."""
     import xarray as xr
 
     with xr.open_dataset(FORCING_PATH) as dataset:
@@ -277,16 +235,16 @@ def compare(sim: np.ndarray, ref: np.ndarray) -> dict[str, float]:
 
     Parameters
     ----------
-    sim : np.ndarray
+    sim
         Series under test.
-    ref : np.ndarray
+    ref
         Reference series.
 
     Returns
     -------
     dict
-        ``max_abs_diff``, ``mean_abs_diff``, ``nse``, ``volume_ratio``,
-        and ``pearson_r``.
+        `max_abs_diff`, `mean_abs_diff`, `nse`, `volume_ratio`, and
+        `pearson_r`.
     """
     sim = np.asarray(sim, dtype=np.float64)
     ref = np.asarray(ref, dtype=np.float64)
@@ -311,20 +269,7 @@ def compare(sim: np.ndarray, ref: np.ndarray) -> dict[str, float]:
 
 
 def format_metrics(label: str, metrics: dict[str, float]) -> str:
-    """Render a metrics dict as a single readable line.
-
-    Parameters
-    ----------
-    label : str
-        Name of the comparison.
-    metrics : dict
-        Output of :func:`compare`.
-
-    Returns
-    -------
-    str
-        Formatted summary line.
-    """
+    """Metric formatting."""
     return (
         f"{label}: max|diff|={metrics['max_abs_diff']:.3e} "
         f"mean|diff|={metrics['mean_abs_diff']:.3e} "
@@ -339,20 +284,20 @@ def align(left: pd.Series, right: pd.Series) -> tuple[np.ndarray, np.ndarray, in
 
     Parameters
     ----------
-    left, right : pd.Series
+    left, right
         Time-indexed series to align.
 
     Returns
     -------
     tuple
-        ``(left_values, right_values, n_overlap)``.
+        The aligned series and the number of overlapping points.
     """
     index = left.index.intersection(right.index)
     return left.reindex(index).to_numpy(), right.reindex(index).to_numpy(), len(index)
 
 
-def missing_artifact_reason(path, produced_by: str) -> Optional[str]:
-    """Return a skip reason if a validation artifact has not been produced.
+def require_artifact(path, produced_by: str) -> None:
+    """Skip the calling test if a validation artifact has not been produced.
 
     A *missing* artifact is a legitimate skip -- the user has not run that leg.
     An artifact that exists but disagrees is never skipped; that is the failure
@@ -360,16 +305,12 @@ def missing_artifact_reason(path, produced_by: str) -> Optional[str]:
 
     Parameters
     ----------
-    path : str or Path
+    path
         Expected artifact location.
-    produced_by : str
+    produced_by
         Command that produces it, quoted back to the user.
-
-    Returns
-    -------
-    str or None
-        Skip reason, or None if the artifact is present.
     """
-    if Path(path).exists():
-        return None
-    return f"{Path(path).name} not found at {path}. Produce it with: {produced_by}"
+    if not Path(path).exists():
+        pytest.skip(
+            f"{Path(path).name} not found at {path}. Produce it with: {produced_by}",
+        )
