@@ -1,7 +1,8 @@
 ### Single-catchment configuration ###
-catchment_id: 'cat-2454'
+catchment_id: cat-2454
+catchment_name: cat-2454
 
-# Catchment attributes
+# Static catchment attributes
 aridity: 0.6160151582560454
 meanP: 1206.0025068241089
 ETPOT_Hargr: 742.5628573033431
@@ -33,10 +34,21 @@ uparea: 30.46544959500381
 catchsize: 13.400998821000195
 lengthkm: 6.527005307025407
 
-# BMI configuration
+# BMI
 model_dir: ./data/dhbv_2_mts/model/dhbv_2_mts/
 dtype: float32
-
 verbose: false
 
-time_step: 1 hour
+# PET calculation method: 'penman_monteith' (default) or 'hargreaves'
+pet_method: penman_monteith
+latitude: 45.403774771022356
+
+warmup:
+  # Daily->hourly handoff cadence (how long the hourly model runs per before
+  # the retrieving states from the daily model)
+  cycle_days: 14
+
+  daily_mode: periodic
+  daily_warmup_days: 351  # Inactive if daily_mode=cold
+  hourly_mode: periodic
+  hourly_warmup_hours: 336  # Inactive if hourly_mode=cold

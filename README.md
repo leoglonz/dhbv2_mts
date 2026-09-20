@@ -166,20 +166,20 @@ src/dhbv2/
 
 </br>
 
-2. Yang, W., Ji, H., Lonzarich, L., Song, Y., Shen, C. (2025). Diffusion-Based Probabilistic Modeling for Hourly Streamflow Prediction and Assimilation. arXiv. <https://arxiv.org/abs/2510.08488> **[Under Review]**
+2. Yang, Lonzarich, L., Song, Y., Ji, H., Pan, M., Lawson, K. Shen, C. (2026). Diffusion-Based Probabilistic Modeling for Hourly Streamflow Prediction and Assimilation. arXiv. <https://arxiv.org/abs/2609.06794> **[Under Review]**
 
     <details>
     <summary>BibTeX</summary>
 
     ```bibtex
     @misc{yang2025diffusionbasedprobabilisticmodelinghourly,
-          title={Diffusion-Based Probabilistic Modeling for Hourly Streamflow Prediction and Assimilation},
-          author={Wencong Yang and Haoyu Ji and Leo Lonzarich and Yalan Song and Chaopeng Shen},
-          year={2025},
-          eprint={2510.08488},
+          title={Hourly U.S.-wide Flood Simulation Beyond the Limits of Traditional and Data-Driven Models},
+          author={Wencong Yang and Leo Lonzarich and Yalan Song and Haoyu Ji and Ming Pan and Kathryn Lawson and Chaopeng Shen},
+          year={2026},
+          eprint={2609.06794},
           archivePrefix={arXiv},
           primaryClass={physics.geo-ph},
-          url={https://arxiv.org/abs/2510.08488},
+          url={https://arxiv.org/abs/2609.06794},
     }
     ```
 

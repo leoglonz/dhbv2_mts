@@ -25,7 +25,7 @@ pkg_root = Path(__file__).parent.parent.parent
 
 ### -------- Settings -------- ###
 HF_PATH = '/projects/mhpi/data/hydrofabric/v2.2/conus_nextgen.gpkg'
-SAVE_PATH = f'{pkg_root}/ngen_resources/data/geo/camels_subset_hf2.gpkg'
+SAVE_PATH = f'{pkg_root}/ngen_resources/data/geo/camels_subset_hf2_2.gpkg'
 CAT_IDS = [2453, 2454, 2455]
 ### -------------------------- ###
 

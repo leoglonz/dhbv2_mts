@@ -2,25 +2,25 @@
 
 After obtaining runoff simulations from δHBV 2.0, there are a few options for routing flow through the river network.
 
-The network can be defined in several ways, with [MERIT-hydro](https://www.reachhydro.org/home/params/merit-basins) and the [NextGen HydroFabric](https://github.com/NOAA-OWP/hydrofabric) being notable examples. In the context of NextGen (ngen), we demonstrate routing on the HydroFabric v2.2 (download [v2.2 source](https://www.lynker-spatial.com) or [AWI-patched v2.2](https://github.com/CIROH-UA/community_hf_patcher/tree/main)) river network with ~4km resolution.
+The network can be defined in several ways, with [MERIT-hydro](https://www.reachhydro.org/home/params/merit-basins) and the [NextGen Hydrofabric](https://github.com/NOAA-OWP/hydrofabric) being notable examples. In the context of NextGen (ngen), we demonstrate routing on the Hydrofabric v2.2 (download [v2.2 source](https://www.lynker-spatial.com) or [AWI-patched v2.2](https://github.com/CIROH-UA/community_hf_patcher/tree/main)) river network with ~4km resolution.
 
 <br/>
 
 ## T-Route
 
-[T-Route](https://github.com/NOAA-OWP/t-route) is the standard routing package shipped with [ngen](https://github.com/NOAA-OWP/ngen) and is installed by default when [building ngen with Docker](./4-run_ngen.md/#). This includes support for e.g., Muskingum-Cunge (MC) and diffusive wave routing methods.
+[T-Route](https://github.com/NOAA-OWP/t-route) is the standard routing package shipped with [ngen](https://github.com/NOAA-OWP/ngen) and is installed by default when [building ngen with Docker](./5-run_ngen.md/#). This includes support for e.g., Muskingum-Cunge (MC) and diffusive wave routing methods.
 
 For the purposes of this module, we only demonstrate usage of troute within ngen as a post-processor. If you wish to do routing standalone, please see the repo's [official documentation](https://github.com/NOAA-OWP/t-route/blob/master/readme.md).
 
 ### T-Route Setup
 
-Setup of T-Route and its dependencies is included in the Docker image build process described for ngen in [4-run_ngen](./4-run_ngen.md), so no further effort is required for this step. It should be noted that the [CIROH-UA/t-route](https://github.com/CIROH-UA/t-route) fork is used here for compatibility, but will not amount to a functional difference from source.
+Setup of T-Route and its dependencies is included in the Docker image build process described for ngen in [5-run_ngen](./5-run_ngen.md), so no further effort is required for this step. It should be noted that the [CIROH-UA/t-route](https://github.com/CIROH-UA/t-route) fork is used here for compatibility, but will not amount to a functional difference from source.
 
 If you wish to build T-Route manually, see [NOAA-OWP/t-route/readme.md](https://github.com/NOAA-OWP/t-route/blob/master/readme.md) for instructions.
 
 ### T-Route Example
 
-See [4-run_ngen](./4-run_ngen.md) for instructions on setting up ngen.
+See [5-run_ngen](./5-run_ngen.md) for instructions on setting up ngen.
 
 To run e.g. MC routing inside ngen with T-Route, an additional routing config is necessary and specified inside the realization:
 
@@ -39,8 +39,8 @@ With an updated realization and routing config, runoff simulation and routing ca
 cd ./ngen
 
 ./cmake_build/ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_routing_cat-2453.json
 
 # Or with Docker
@@ -50,12 +50,14 @@ docker run --rm \
     -v $(pwd)/output:/ngen/output \
     localbuild/ngen:latest \
     ngen \
-    data/geo/camels_subset_hf2.gpkg '' \
-    data/geo/camels_subset_hf2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
+    data/geo/camels_subset_hf2_2.gpkg '' \
     data/dhbv_2_mts/realizations/realization_troute_cat-2453.json
 ```
 
 Outputs will save by default to `./ngen/output/stream_output`.
+
+Note that `nts`, `max_loop_size`, and `start_datetime` in the routing config are pinned to the realization's time window and must be updated alongside it, and that `stream_output_time` is *hours per output file* — the default emits one NetCDF per routed hour. The shipped config routes the full post-spin-up period (17,328 hours) into a single file. [8-validation](./8-validation.md#leg-3--t-route) covers how these relate, and provides a routed check that verifies volume conservation through this path.
 
 In addition to running in NextGen, T-Route can be deployed standalone and comes with a few examples to demonstrate:
 

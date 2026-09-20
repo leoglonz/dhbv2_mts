@@ -1,5 +1,4 @@
-"""
-Tests for PET (potential evapotranspiration) calculation functions.
+"""Tests for PET functions.
 
 Coverage:
 - hargreaves_pet: non-negativity, shape, monotonicity, edge cases

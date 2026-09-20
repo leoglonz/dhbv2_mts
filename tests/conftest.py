@@ -1,10 +1,29 @@
 """Shared fixtures for dhbv2 BMI tests."""
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
+sys.path.insert(0, str(Path(__file__).parent))
+
 from dhbv2.bmi import DeltaModelBmi
 from dhbv2.mts_bmi import MtsDeltaModelBmi
+
+
+def pytest_addoption(parser):
+    """Register the validation suite's --run-dir option."""
+    parser.addoption(
+        '--run-dir',
+        action='store',
+        default=None,
+        help=(
+            "Directory holding your own ngen run of the shipped cat-2453 "
+            "example: a cat-2453.csv, plus troute_output_*.nc if you routed. "
+            "Without it the ngen and t-route validation legs skip."
+        ),
+    )
 
 
 @pytest.fixture
