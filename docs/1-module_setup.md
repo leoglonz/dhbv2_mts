@@ -79,15 +79,18 @@ Do this if you plan to use the dhbv2 on its own or develop on the module.
     ```bash
     cd dhbv2
 
-    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip ./temp/ --no-sign-request
+    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2.1_mts.zip ./temp/ --no-sign-request
 
-    unzip ./temp/dhbv_2_mts.zip -d ./temp
+    unzip ./temp/dhbv_2.1_mts.zip -d ./temp
 
     mv ./temp/dhbv_2_mts/ ./ngen_resources/data/dhbv_2_mts/model/
     rm -r ./temp
     ```
 
-    or install [from your browser](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/owp/dhbv_2_mts.zip) (slower) and move contents to `/ngen_resources/data/dhbv_2_mts/model/`.
+    or install [from your browser](https://mhpi-spatial.s3.us-east-2.amazonaws.com/mhpi-release/models/owp/dhbv_2.1_mts.zip) (slower) and move contents to `/ngen_resources/data/dhbv_2_mts/model/`.
+
+    > NOTE: the above installs model weights for MTS v2.1. This replaces v2.0 which is similarly available at `s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip`.
+
 
 ### (2) NextGen Integration
 
@@ -138,11 +141,13 @@ To use this module within the [NextGen framework](https://github.com/NOAA-OWP/ng
     rm -r /temp
 
     # For hourly (MTS) model:
-    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip . --no-sign-request
+    aws s3 cp s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2.1_mts.zip . --no-sign-request
     unzip dhbv_2_mts.zip -d /temp
     mv /temp/dhbv_2_mts/. ./data/dhbv_2_mts/model/dhbv_2_mts/
     rm -r /temp
     ```
+
+    > NOTE: the above installs model weights for MTS v2.1. This replaces v2.0 which is similarly available at `s3://mhpi-spatial/mhpi-release/models/owp/dhbv_2_mts.zip`.
 
 5. Build ngen in accordance with instructions for your NextGen distribution. This will install necessary dhbv2 dependencies.
 
